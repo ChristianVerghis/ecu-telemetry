@@ -1,0 +1,21 @@
+name: thermal_runaway
+description: >
+  One highway device suffers an OVERTEMP fault for 25 s starting at t=15 s (thermal time constant is 60 s, so recovery takes ~40 s).
+  Expect the fault-flag alert and the temperature-threshold alert to open while
+  the fault is active, and to auto-resolve once the flag clears and temperature
+  falls back under the limit.
+duration_s: 125
+backend: {http: "http://127.0.0.1:8780", udp_port: 8781, tcp_port: 8782}
+devices:
+  - {id: ECU-0001, profile: highway, fw: 1.0.0, hw: SIM-MOTOR-A, hz: 10, drop_rate: 0.0, seed: 11,
+     faults: ["OVERTEMP@15:25"]}
+  - {id: ECU-0002, profile: city,    fw: 1.0.0, hw: SIM-MOTOR-A, hz: 10, drop_rate: 0.0, seed: 12}
+timeline: []
+expect:
+  - {at_s: 15, check: device_state, device: ECU-0001, params: {online: true, state: [IDLE, RUNNING]}}
+  - {at_s: 30, check: alert_open,   device: ECU-0001, params: {match: OVERTEMP}}
+  - {at_s: 35, check: alert_open,   device: ECU-0001, params: {match: temp}}
+  - {at_s: 35, check: device_state, device: ECU-0001, params: {state: [DEGRADED, FAULT], fault_flags_any: [OVERTEMP]}}
+  - {at_s: 40, check: no_alerts_of_severity, device: ECU-0002, params: {severity: critical}}
+  - {at_s: 105, check: alert_resolved, device: ECU-0001, params: {match: OVERTEMP}}
+  - {at_s: 110, check: alert_resolved, device: ECU-0001, params: {match: temp}}

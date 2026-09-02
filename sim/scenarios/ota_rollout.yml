@@ -1,0 +1,27 @@
+name: ota_rollout
+description: >
+  Register firmware 1.1.0 in the backend, then deploy it to three of four
+  devices, staggered 10 s apart. Each device should FW_ACK, simulate the
+  download, reboot, reconnect and re-HELLO with the new version. Expect
+  fw_version updated in /api/devices for the three targets only.
+duration_s: 80
+backend: {http: "http://127.0.0.1:8780", udp_port: 8781, tcp_port: 8782}
+devices:
+  - {id: ECU-0001, profile: city,    fw: 1.0.0, hw: SIM-MOTOR-A, hz: 10, drop_rate: 0.0, seed: 31}
+  - {id: ECU-0002, profile: highway, fw: 1.0.0, hw: SIM-MOTOR-A, hz: 10, drop_rate: 0.0, seed: 32}
+  - {id: ECU-0003, profile: idle,    fw: 1.0.0, hw: SIM-MOTOR-B, hz: 5,  drop_rate: 0.0, seed: 33}
+  - {id: ECU-0004, profile: city,    fw: 1.0.0, hw: SIM-MOTOR-B, hz: 10, drop_rate: 0.0, seed: 34}
+timeline:
+  - {at_s: 10, action: firmware_register, params: {version: "1.1.0", notes: "SIL OTA rollout", size_bytes: 1000000}}
+  - {at_s: 15, action: firmware_deploy, device: ECU-0001, params: {version: "1.1.0"}}
+  - {at_s: 25, action: firmware_deploy, device: ECU-0002, params: {version: "1.1.0"}}
+  - {at_s: 35, action: firmware_deploy, device: ECU-0003, params: {version: "1.1.0"}}
+expect:
+  - {at_s: 12, check: device_fw, device: ECU-0001, params: {version: "1.0.0"}}
+  - {at_s: 30, check: device_fw, device: ECU-0001, params: {version: "1.1.0"}}
+  - {at_s: 40, check: device_fw, device: ECU-0002, params: {version: "1.1.0"}}
+  - {at_s: 50, check: device_fw, device: ECU-0003, params: {version: "1.1.0"}}
+  - {at_s: 55, check: device_state, device: ECU-0001, params: {online: true, has_telemetry: true}}
+  - {at_s: 55, check: device_state, device: ECU-0002, params: {online: true}}
+  - {at_s: 55, check: device_fw, device: ECU-0004, params: {version: "1.0.0"}}
+  - {at_s: 60, check: no_alerts_of_severity, params: {severity: critical}}

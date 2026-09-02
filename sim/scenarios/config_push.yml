@@ -1,0 +1,23 @@
+name: config_push
+description: >
+  Push a much lower temp_limit_c to a highway device (whose winding runs warm).
+  Expect the config_version to bump, the CONFIG_ACK to be reflected in the
+  device record, and a temperature-threshold alert to fire without any fault
+  injection. Then raise the limit back and expect the alert to resolve.
+duration_s: 80
+backend: {http: "http://127.0.0.1:8780", udp_port: 8781, tcp_port: 8782}
+devices:
+  - {id: ECU-0001, profile: highway, fw: 1.0.0, hw: SIM-MOTOR-A, hz: 10, drop_rate: 0.0, seed: 41}
+  - {id: ECU-0002, profile: idle,    fw: 1.0.0, hw: SIM-MOTOR-B, hz: 5,  drop_rate: 0.0, seed: 42}
+timeline:
+  - {at_s: 15, action: config, device: ECU-0001,
+     params: {telemetry_hz: 20, log_level: "info", rpm_limit: 9000, temp_limit_c: 20.0, current_limit_a: 400}}
+  - {at_s: 50, action: config, device: ECU-0001,
+     params: {telemetry_hz: 10, log_level: "info", rpm_limit: 9000, temp_limit_c: 120.0, current_limit_a: 400}}
+expect:
+  - {at_s: 12, check: device_state,   device: ECU-0001, params: {online: true}}
+  - {at_s: 22, check: config_version, device: ECU-0001, params: {min: 1, acked: true}}
+  - {at_s: 35, check: alert_open,     device: ECU-0001, params: {match: temp}}
+  - {at_s: 40, check: no_alerts_of_severity, device: ECU-0002, params: {severity: critical}}
+  - {at_s: 57, check: config_version, device: ECU-0001, params: {min: 2, acked: true}}
+  - {at_s: 75, check: alert_resolved, device: ECU-0001, params: {match: temp}}

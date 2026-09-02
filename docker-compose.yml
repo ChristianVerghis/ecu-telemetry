@@ -1,0 +1,92 @@
+# ECU telemetry platform — backend + 4 simulated ECUs.
+#
+#   docker compose up --build                 # backend + ecu-1..4, dashboard on http://localhost:8780
+#   docker compose --profile chaos up --build # additionally routes ecu-4 through a lossy UDP proxy
+#
+# Ports: 8780 HTTP/dashboard, 8781/udp telemetry, 8782 TCP control.
+
+x-ecu-common: &ecu-common
+  build:
+    context: ./firmware
+  depends_on:
+    backend:
+      condition: service_healthy
+  restart: unless-stopped
+  init: true
+
+services:
+  backend:
+    build:
+      context: ./backend
+    ports:
+      - "8780:8780"
+      - "8781:8781/udp"
+      - "8782:8782"
+    volumes:
+      - ./backend/data:/app/data
+    environment:
+      ECU_HTTP_PORT: "8780"
+      ECU_UDP_PORT: "8781"
+      ECU_TCP_PORT: "8782"
+      ECU_DB_PATH: /app/data/telemetry.db
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8780/health', timeout=2).status==200 else 1)\""]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+    restart: unless-stopped
+
+  ecu-1:
+    <<: *ecu-common
+    command: ["--id", "ECU-0001", "--host", "backend", "--udp-port", "8781", "--tcp-port", "8782",
+              "--profile", "city", "--hz", "10", "--seed", "1", "--drop-rate", "0.0", "--fw", "1.0.0"]
+
+  ecu-2:
+    <<: *ecu-common
+    command: ["--id", "ECU-0002", "--host", "backend", "--udp-port", "8781", "--tcp-port", "8782",
+              "--profile", "highway", "--hz", "10", "--seed", "2", "--drop-rate", "0.02", "--fw", "1.0.0"]
+
+  ecu-3:
+    <<: *ecu-common
+    # recurring thermal fault: OVERTEMP 60 s in, for 30 s; the agent restarts the schedule each run
+    command: ["--id", "ECU-0003", "--host", "backend", "--udp-port", "8781", "--tcp-port", "8782",
+              "--profile", "stress", "--hz", "20", "--seed", "3", "--drop-rate", "0.0", "--fw", "1.0.1",
+              "--fault", "OVERTEMP@60:30", "--fault", "VIBRATION_HIGH@150:20"]
+
+  ecu-4:
+    <<: *ecu-common
+    command: ["--id", "ECU-0004", "--host", "backend", "--udp-port", "8781", "--tcp-port", "8782",
+              "--profile", "idle", "--hz", "5", "--seed", "4", "--drop-rate", "0.05", "--fw", "1.0.0", "--hw", "SIM-MOTOR-B"]
+
+  # --- chaos profile: a lossy UDP proxy and one more ECU whose telemetry goes through it ---
+  lossy-proxy:
+    profiles: ["chaos"]
+    image: python:3.13-slim
+    working_dir: /sim
+    volumes:
+      - ./sim:/sim:ro
+    # UDP 9781 -> backend:8781 with impairments; TCP 8782 -> backend:8782 relayed untouched so the
+    # agent can use a single --host for both transports.
+    command: ["python", "lossy_proxy.py", "--listen", "9781", "--bind", "0.0.0.0", "--forward", "backend:8781",
+              "--tcp-listen", "8782", "--tcp-forward", "backend:8782",
+              "--drop", "0.15", "--delay-ms", "40", "--jitter-ms", "20", "--reorder", "0.05",
+              "--control-port", "9790", "--stats-every", "30"]
+    ports:
+      - "9790:9790"   # POST /set {"drop":0.5} to change impairments live
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+  ecu-5-lossy:
+    <<: *ecu-common
+    profiles: ["chaos"]
+    depends_on:
+      backend:
+        condition: service_healthy
+      lossy-proxy:
+        condition: service_started
+    command: ["--id", "ECU-0005", "--host", "lossy-proxy", "--udp-port", "9781", "--tcp-port", "8782",
+              "--profile", "highway", "--hz", "10", "--seed", "5", "--drop-rate", "0.0", "--fw", "1.0.0"]

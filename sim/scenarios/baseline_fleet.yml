@@ -1,0 +1,24 @@
+name: baseline_fleet
+description: >
+  Six healthy devices with mixed driving profiles and a little natural UDP loss.
+  Proves the ingest path end-to-end: every device comes online, telemetry flows,
+  and no critical alert is raised during the run.
+duration_s: 45
+backend: {http: "http://127.0.0.1:8780", udp_port: 8781, tcp_port: 8782}
+devices:
+  - {id: ECU-0001, profile: city,    fw: 1.0.0, hw: SIM-MOTOR-A, hz: 10, drop_rate: 0.0,  seed: 1}
+  - {id: ECU-0002, profile: highway, fw: 1.0.0, hw: SIM-MOTOR-A, hz: 10, drop_rate: 0.01, seed: 2}
+  - {id: ECU-0003, profile: idle,    fw: 1.0.0, hw: SIM-MOTOR-B, hz: 5,  drop_rate: 0.0,  seed: 3}
+  - {id: ECU-0004, profile: city,    fw: 1.0.0, hw: SIM-MOTOR-B, hz: 10, drop_rate: 0.02, seed: 4}
+  - {id: ECU-0005, profile: highway, fw: 1.0.1, hw: SIM-MOTOR-A, hz: 20, drop_rate: 0.0,  seed: 5}
+  - {id: ECU-0006, profile: idle,    fw: 1.0.1, hw: SIM-MOTOR-B, hz: 2,  drop_rate: 0.0,  seed: 6}
+timeline: []
+expect:
+  - {at_s: 15, check: device_state, device: ECU-0001, params: {online: true, has_telemetry: true}}
+  - {at_s: 15, check: device_state, device: ECU-0002, params: {online: true, has_telemetry: true}}
+  - {at_s: 15, check: device_state, device: ECU-0003, params: {online: true, has_telemetry: true}}
+  - {at_s: 15, check: device_state, device: ECU-0004, params: {online: true, has_telemetry: true}}
+  - {at_s: 15, check: device_state, device: ECU-0005, params: {online: true, has_telemetry: true}}
+  - {at_s: 15, check: device_state, device: ECU-0006, params: {online: true, has_telemetry: true}}
+  - {at_s: 20, check: device_fw, device: ECU-0005, params: {version: "1.0.1"}}
+  - {at_s: 40, check: no_alerts_of_severity, params: {severity: critical}}

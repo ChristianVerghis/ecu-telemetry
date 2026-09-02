@@ -1,0 +1,97 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+  packages: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  firmware:
+    name: firmware ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          - { arch: amd64, runner: ubuntu-latest }
+          - { arch: arm64, runner: ubuntu-24.04-arm }
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build (static-ish release)
+        run: |
+          cmake -S firmware -B firmware/build -DCMAKE_BUILD_TYPE=Release
+          cmake --build firmware/build --parallel
+          ctest --test-dir firmware/build --output-on-failure
+      - name: Package
+        run: |
+          mkdir -p dist
+          cp firmware/build/ecu_agent dist/ecu_agent-linux-${{ matrix.arch }}
+          cd dist && sha256sum ecu_agent-linux-${{ matrix.arch }} > ecu_agent-linux-${{ matrix.arch }}.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ecu_agent-linux-${{ matrix.arch }}
+          path: dist/*
+          if-no-files-found: error
+
+  images:
+    name: docker images (ghcr)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Image names
+        id: names
+        run: |
+          owner=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          echo "backend=ghcr.io/${owner}/ecu-telemetry-backend" >> "$GITHUB_OUTPUT"
+          echo "firmware=ghcr.io/${owner}/ecu-telemetry-ecu" >> "$GITHUB_OUTPUT"
+          echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+      - name: Build + push backend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ steps.names.outputs.backend }}:${{ steps.names.outputs.version }}
+            ${{ steps.names.outputs.backend }}:latest
+      - name: Build + push firmware
+        uses: docker/build-push-action@v6
+        with:
+          context: ./firmware
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ steps.names.outputs.firmware }}:${{ steps.names.outputs.version }}
+            ${{ steps.names.outputs.firmware }}:latest
+
+  release:
+    name: github release
+    needs: [firmware, images]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Attach binaries
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
+          body: |
+            Docker images:
+            - `ghcr.io/${{ github.repository_owner }}/ecu-telemetry-backend:${{ github.ref_name }}`
+            - `ghcr.io/${{ github.repository_owner }}/ecu-telemetry-ecu:${{ github.ref_name }}`

@@ -1,0 +1,27 @@
+name: cascade
+description: >
+  Compound failure on one device: UNDERVOLTAGE from the agent schedule, then
+  ENCODER_FAULT injected via the API, then a reboot command. Expect the
+  device to walk through DEGRADED / FAULT, both fault alerts to open, the
+  reboot to be observed (uptime reset), and the diagnose endpoint to return a
+  non-empty probable_causes list.
+duration_s: 90
+backend: {http: "http://127.0.0.1:8780", udp_port: 8781, tcp_port: 8782}
+devices:
+  - {id: ECU-0001, profile: stress,  fw: 1.0.0, hw: SIM-MOTOR-A, hz: 10, drop_rate: 0.02, seed: 51,
+     faults: ["UNDERVOLTAGE@15:60"]}
+  - {id: ECU-0002, profile: city,    fw: 1.0.0, hw: SIM-MOTOR-A, hz: 10, drop_rate: 0.0,  seed: 52}
+timeline:
+  - {at_s: 30, action: fault, device: ECU-0001, params: {set: [ENCODER_FAULT], duration_ms: 0}}
+  - {at_s: 55, action: cmd,   device: ECU-0001, params: {cmd: reboot}}
+  - {at_s: 70, action: clear_fault, device: ECU-0001, params: {clear: [ENCODER_FAULT, UNDERVOLTAGE]}}
+expect:
+  - {at_s: 10, check: device_state, device: ECU-0001, params: {online: true}}
+  - {at_s: 25, check: alert_open,   device: ECU-0001, params: {match: UNDERVOLTAGE}}
+  - {at_s: 25, check: device_state, device: ECU-0001, params: {state: [DEGRADED, FAULT]}}
+  - {at_s: 40, check: alert_open,   device: ECU-0001, params: {match: ENCODER}}
+  - {at_s: 40, check: device_state, device: ECU-0001, params: {state: [DEGRADED, FAULT], fault_flags_any: [ENCODER_FAULT, UNDERVOLTAGE]}}
+  - {at_s: 45, check: diagnosis_nonempty, device: ECU-0001, params: {}}
+  - {at_s: 65, check: device_state, device: ECU-0001, params: {online: true, uptime_lt_s: 30}}
+  - {at_s: 85, check: alert_resolved, device: ECU-0001, params: {match: ENCODER}}
+  - {at_s: 85, check: no_alerts_of_severity, device: ECU-0002, params: {severity: critical}}

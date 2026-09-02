@@ -1,0 +1,24 @@
+name: lossy_link
+description: >
+  ECU-0001 has 25% agent-side UDP loss; ECU-0002 is routed through lossy_proxy
+  (10% loss, 40 ms delay, 20 ms jitter, 5% reorder). Mid-run the proxy loss is
+  raised to 50%. Expect a comm / packet-loss alert on both, and loss_pct that
+  tracks the configured impairments.
+duration_s: 75
+backend: {http: "http://127.0.0.1:8780", udp_port: 8781, tcp_port: 8782}
+proxy: {listen: 9781, control_port: 9790, drop: 0.10, delay_ms: 40, jitter_ms: 20, reorder: 0.05, dup: 0.0}
+devices:
+  - {id: ECU-0001, profile: city,    fw: 1.0.0, hw: SIM-MOTOR-A, hz: 10, drop_rate: 0.25, seed: 21}
+  - {id: ECU-0002, profile: highway, fw: 1.0.0, hw: SIM-MOTOR-A, hz: 10, drop_rate: 0.0,  seed: 22, via_proxy: true}
+  - {id: ECU-0003, profile: idle,    fw: 1.0.0, hw: SIM-MOTOR-B, hz: 10, drop_rate: 0.0,  seed: 23}
+timeline:
+  - {at_s: 40, action: proxy_set, params: {drop: 0.5}}
+expect:
+  - {at_s: 20, check: device_state, device: ECU-0001, params: {online: true}}
+  - {at_s: 20, check: device_state, device: ECU-0002, params: {online: true}}
+  - {at_s: 25, check: loss_pct_gt,  device: ECU-0001, params: {value: 10}}
+  - {at_s: 25, check: loss_pct_gt,  device: ECU-0002, params: {value: 2}}
+  - {at_s: 35, check: alert_open,   device: ECU-0001, params: {match: ["loss", "comm"]}}
+  - {at_s: 60, check: loss_pct_gt,  device: ECU-0002, params: {value: 20}}
+  - {at_s: 65, check: alert_open,   device: ECU-0002, params: {match: ["loss", "comm"]}}
+  - {at_s: 65, check: loss_pct_gt,  device: ECU-0003, params: {value: 0, invert: true}}

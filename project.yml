@@ -1,10 +1,33 @@
 # project.yml — dashboard manifest (auto-read by ~/dev/dashboard)
 name: ecu-telemetry
 kind: service
-status: incubating
-description: Miniature connected-vehicle telemetry platform: simulated C++ ECUs → binary UDP/TCP protocol → FastAPI ingestion → SQLite time-series → live dashboard, alerts, OTA config/firmware, SIL fault injection, AI diagnostics.
+status: active
+description: Miniature connected-vehicle telemetry platform — simulated C++ ECUs → binary UDP/TCP protocol → FastAPI ingestion → SQLite time-series → live dashboard, alerts/anomaly detection, OTA config + firmware, SIL fault injection, AI-assisted diagnostics.
 port: 8780
-# start: ./run.sh        # uncomment — used by `dev up` and the dashboard's start button
+start: ./run.sh
+health: http://localhost:8780/health
 links:
-  - { label: "Open ecu-telemetry →", href: "http://localhost:8780", primary: true }
-actions: {}              # e.g. test: pytest -q
+  - { label: "Open dashboard →", href: "http://localhost:8780", primary: true }
+  - { label: "API docs →", href: "http://localhost:8780/docs" }
+  - { label: "Fleet JSON", href: "http://localhost:8780/api/devices" }
+  - { label: "Open alerts", href: "http://localhost:8780/api/alerts?status=open" }
+  - { label: "Protocol spec", path: "docs/protocol.md" }
+  - { label: "Architecture", path: "docs/architecture.md" }
+actions:
+  build-firmware: cmake -S firmware -B firmware/build -DCMAKE_BUILD_TYPE=Release && cmake --build firmware/build -j
+  test-firmware: ctest --test-dir firmware/build --output-on-failure
+  test-backend: backend/.venv/bin/python -m pytest -q backend/tests
+  test-integration: backend/.venv/bin/python -m pytest -q tests/integration
+  fleet-demo: backend/.venv/bin/python sim/fleet.py --n 6
+  sil-thermal: backend/.venv/bin/python sim/run_sil.py sim/scenarios/thermal_runaway.yml
+  sil-baseline: backend/.venv/bin/python sim/run_sil.py sim/scenarios/baseline_fleet.yml
+metrics:
+  - { label: "devices online", type: http_json, url: "http://localhost:8780/health", path: "devices_online" }
+  - { label: "frames ingested", type: http_json, url: "http://localhost:8780/api/stats", path: "frames" }
+  - { label: "open alerts", type: http_json, url: "http://localhost:8780/api/stats", path: "alerts_open" }
+freshness:
+  - { label: "build log", file: "build_log.md", warn_days: 14, fail_days: 45 }
+tags: [embedded, c++, telemetry, udp, fastapi, sqlite, time-series, anomaly-detection, ota, sil, docker, ci]
+showcase:
+  kind: app
+  href: http://localhost:8780

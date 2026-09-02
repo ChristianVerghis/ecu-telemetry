@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ECU Telemetry</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header id="topbar">
+  <div class="brand" onclick="location.hash='#/'"><span class="dot" id="sse-dot"></span>ECU<span class="thin">TELEMETRY</span></div>
+  <div id="kpis" class="kpis"></div>
+  <div class="spacer"></div>
+  <div class="clock" id="clock"></div>
+  <button id="alerts-btn" class="btn" title="Open alerts">ALERTS <span id="alerts-badge" class="badge">0</span></button>
+</header>
+<main id="view"></main>
+<aside id="drawer" class="drawer hidden">
+  <div class="drawer-head"><span>OPEN ALERTS</span><button class="btn small" id="drawer-close">×</button></div>
+  <div id="drawer-list" class="drawer-list"></div>
+</aside>
+<div id="toast" class="toast hidden"></div>
+<script src="/static/app.js"></script>
+</body>
+</html>
