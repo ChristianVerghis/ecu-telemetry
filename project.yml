@@ -1,0 +1,10 @@
+# project.yml — dashboard manifest (auto-read by ~/dev/dashboard)
+name: ecu-telemetry
+kind: service
+status: incubating
+description: Miniature connected-vehicle telemetry platform: simulated C++ ECUs → binary UDP/TCP protocol → FastAPI ingestion → SQLite time-series → live dashboard, alerts, OTA config/firmware, SIL fault injection, AI diagnostics.
+port: 8780
+# start: ./run.sh        # uncomment — used by `dev up` and the dashboard's start button
+links:
+  - { label: "Open ecu-telemetry →", href: "http://localhost:8780", primary: true }
+actions: {}              # e.g. test: pytest -q
