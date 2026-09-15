@@ -23,7 +23,7 @@ A portfolio-grade miniature connected-vehicle platform that exercises the whole 
 - [x] AI-assisted diagnostics (Claude, heuristic fallback)
 
 ## Next
-- [ ] Push to GitHub (private repo ChristianVerghis/ecu-telemetry) and watch CI go green
+- [ ] Publish to GitHub and watch CI go green
 - [ ] Real hardware target: port agent to an ESP32/STM32 (lwIP sockets) reading a real motor
 - [ ] MQTT transport option alongside raw UDP
 - [ ] Downsampled long-range charts (rollup-backed 7d view)

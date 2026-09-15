@@ -1,4 +1,4 @@
-# project.yml — dashboard manifest (auto-read by ~/dev/dashboard)
+# project.yml — project manifest (name, ports, entry points, health check, common actions)
 name: ecu-telemetry
 kind: service
 status: active

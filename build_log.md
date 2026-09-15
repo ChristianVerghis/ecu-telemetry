@@ -1,6 +1,6 @@
 # ecu-telemetry build log
 
-**Update 2026-09-01**: scaffolded via `dev new`.
+**Update 2026-09-01**: scaffolded the repo layout.
 
 **Update 2026-09-01**: built the whole chain in one session.
 - `docs/protocol.md` + `docs/interfaces.md` written first as the contract; firmware, backend and sim were then built in parallel against it.

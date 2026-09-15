@@ -34,3 +34,11 @@ sim/reports/
 .env
 .env.*
 !.env.example
+
+# generic runtime data / packaging
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+dist/
+node_modules/
