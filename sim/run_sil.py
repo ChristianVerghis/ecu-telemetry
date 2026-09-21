@@ -544,7 +544,8 @@ class Runner:
     # ----- spawning -----
     def spawn(self, name: str, cmd: list[str], cwd: Path | None = None, env: dict | None = None) -> Child:
         self.log_dir.mkdir(parents=True, exist_ok=True)
-        log_path = self.log_dir / f"{self.sc['name']}-{name}.log"
+        safe_name = name.replace(":", "-")
+        log_path = self.log_dir / f"{self.sc['name']}-{safe_name}.log"
         fh = open(log_path, "wb")
         proc = subprocess.Popen(
             cmd, cwd=str(cwd) if cwd else None, env=env, stdout=fh, stderr=subprocess.STDOUT,
