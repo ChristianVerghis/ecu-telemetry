@@ -10,3 +10,5 @@
 - `docker-compose.yml` (backend + 4 ECUs, `chaos` profile), GitHub Actions CI (firmware/backend/integration/SIL/docker) + tagged release workflow, Makefile.
 - Integration fixes: aligned undervoltage rule to the firmware's 96 V pack (was 48 V), `pythonpath` in pytest.ini so tests run from repo root, thermal_runaway scenario timing relaxed (60 s thermal time constant means recovery takes ~40 s).
 - Not verified locally: Docker builds (daemon not running). GitHub remote not yet created.
+
+**Update 2026-09-25** (nightly): added a "7d" range to the device detail chart, using the existing `step=1m` rollup-backed query (`telemetry_rollup_1m` isn't pruned by retention, so 7 days of 1-min buckets survive the 24h raw-retention window). 24/24 backend tests pass; smoke-tested the endpoint against the running service.

@@ -26,5 +26,5 @@ A portfolio-grade miniature connected-vehicle platform that exercises the whole 
 - [ ] Publish to GitHub and watch CI go green
 - [ ] Real hardware target: port agent to an ESP32/STM32 (lwIP sockets) reading a real motor
 - [ ] MQTT transport option alongside raw UDP
-- [ ] Downsampled long-range charts (rollup-backed 7d view)
+- [x] Downsampled long-range charts (rollup-backed 7d view)
 - [ ] Alert notifications (email/Slack webhook)

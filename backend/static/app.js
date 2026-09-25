@@ -206,7 +206,7 @@ function DeviceView(id) {
       h("span", { class: `pill ${d.state === 3 ? "crit" : d.state === 2 ? "warn" : d.state === 1 ? "ok" : "dim"}` }, STATES[d.state ?? 0]),
       h("span", { class: "sub" }, `${d.hw_model || "?"} · fw ${d.fw_version || "?"} · cfg v${d.config_version} · ${d.online ? "online" : "OFFLINE"} · tcp ${d.tcp_connected ? "up" : "down"}`),
       h("div", { class: "chips", id: "chips" }, ...(flagsOf(L.fault_flags || 0).length ? flagsOf(L.fault_flags || 0).map(f => h("span", { class: "chip" }, f)) : [h("span", { class: "chip none" }, "no faults")])),
-      h("div", { class: "range" }, ...["5m", "1h", "24h"].map(r => h("button", { class: `btn small ${r === range ? "active" : ""}`, onclick: async () => { range = r; await loadHistory(); drawCharts(); head(); } }, r))),
+      h("div", { class: "range" }, ...["5m", "1h", "24h", "7d"].map(r => h("button", { class: `btn small ${r === range ? "active" : ""}`, onclick: async () => { range = r; await loadHistory(); drawCharts(); head(); } }, r))),
     );
   }
   function side() {
@@ -218,16 +218,17 @@ function DeviceView(id) {
     drawMap($("#map"), buf?.pos?.length ? buf.pos : (hist?.rows || []).map(r => [r.lat, r.lon]), d.faults);
   }
   async function loadHistory() {
-    const secs = { "5m": 300, "1h": 3600, "24h": 86400 }[range], step = range === "5m" ? "raw" : range === "1h" ? "10s" : "1m";
+    const secs = { "5m": 300, "1h": 3600, "24h": 86400, "7d": 604800 }[range], step = range === "5m" ? "raw" : range === "1h" ? "10s" : "1m";
     const since = new Date(Date.now() - secs * 1000).toISOString();
-    try { hist = await api(`/api/devices/${id}/telemetry?since=${since}&step=${step}&limit=5000`); } catch (e) { hist = { rows: [] }; }
+    const limit = range === "7d" ? 11000 : 5000;
+    try { hist = await api(`/api/devices/${id}/telemetry?since=${since}&step=${step}&limit=${limit}`); } catch (e) { hist = { rows: [] }; }
     if (range === "5m" && hist.rows.length) {   // seed live buffers so charts continue seamlessly
       const buf = { pos: [] }; for (const [m] of METRICS) buf[m] = hist.rows.map(r => [r.ts * 1000, r[m]]).slice(-RING);
       buf.pos = hist.rows.filter(r => r.lat || r.lon).map(r => [r.lat, r.lon]); S.live.set(id, buf);
     }
   }
   function drawCharts() {
-    const now = Date.now(), secs = { "5m": 300, "1h": 3600, "24h": 86400 }[range], t0 = now - secs * 1000;
+    const now = Date.now(), secs = { "5m": 300, "1h": 3600, "24h": 86400, "7d": 604800 }[range], t0 = now - secs * 1000;
     const cfg = detail?.config || {}, limits = { rpm: cfg.rpm_limit, temp_c: cfg.temp_limit_c, current_a: cfg.current_limit_a, voltage_v: 80 };
     const buf = S.live.get(id);
     for (const [m, , dec, color] of METRICS) {
