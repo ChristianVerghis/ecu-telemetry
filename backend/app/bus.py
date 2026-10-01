@@ -6,11 +6,12 @@ import time
 
 
 class EventBus:
-    def __init__(self, maxsize: int = 1000):
+    def __init__(self, maxsize: int = 1000, mqtt_bridge=None):
         self.subs: set[asyncio.Queue] = set()
         self.maxsize = maxsize
         self._last_tel: dict[str, float] = {}
         self.published = 0
+        self.mqtt_bridge = mqtt_bridge
 
     def subscribe(self) -> asyncio.Queue:
         q: asyncio.Queue = asyncio.Queue(maxsize=self.maxsize)
@@ -41,4 +42,6 @@ class EventBus:
             return False
         self._last_tel[device_id] = now
         self.publish("telemetry", data)
+        if self.mqtt_bridge is not None:
+            self.mqtt_bridge.publish(device_id, data)
         return True

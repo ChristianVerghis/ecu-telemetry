@@ -18,6 +18,7 @@ from .bus import EventBus
 from .db import Database, maintenance_loop
 from .diagnostics import Diagnostician
 from .ingest import Ingest
+from . import mqtt_bridge
 
 STATIC = Path(__file__).resolve().parent.parent / "static"
 
@@ -31,7 +32,7 @@ def create_app(db_path: str | None = None, udp_port: int | None = None, tcp_port
     @contextlib.asynccontextmanager
     async def lifespan(app: FastAPI):
         db = Database(db_path)
-        bus = EventBus()
+        bus = EventBus(mqtt_bridge=mqtt_bridge.from_env())
         engine = AnomalyEngine(db, bus)
         ingest = Ingest(db, bus, engine, udp, tcp, bind)
         app.state.db, app.state.bus, app.state.engine, app.state.ingest = db, bus, engine, ingest
@@ -47,6 +48,8 @@ def create_app(db_path: str | None = None, udp_port: int | None = None, tcp_port
             with contextlib.suppress(asyncio.CancelledError):
                 await maint
             await ingest.stop()
+            if bus.mqtt_bridge is not None:
+                bus.mqtt_bridge.close()
             db.close()
 
     app = FastAPI(title="ECU Telemetry", version="0.1.0", lifespan=lifespan)
