@@ -25,7 +25,7 @@ PROFILES       ?= city,highway,idle
 DROP           ?= 0.0
 COMPOSE        ?= docker compose
 
-.PHONY: help build venv test test-firmware test-backend test-integration sil sil-all validate fleet up down clean
+.PHONY: jetson-deploy jetson-logs help build venv test test-firmware test-backend test-integration sil sil-all validate fleet up down clean
 
 help: ## list targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
@@ -78,3 +78,14 @@ clean: ## remove build outputs, caches, reports and runtime db
 	find . -name '.pytest_cache' -type d -prune -exec rm -rf {} + 2>/dev/null || true
 	rm -f $(BACKEND_DIR)/data/*.db $(BACKEND_DIR)/data/*.db-*
 	find . -name '*.applied' -delete 2>/dev/null || true
+
+# --- Jetson (real hardware target) ---------------------------------------
+JETSON ?= jetson
+jetson-deploy: ## rsync firmware+deploy to the Jetson, build there, restart the agent service if installed
+	ssh $(JETSON) 'mkdir -p ~/ecu-telemetry/firmware ~/ecu-telemetry/docs ~/ecu-telemetry/deploy'
+	rsync -a --delete --exclude build --exclude .git firmware/ $(JETSON):~/ecu-telemetry/firmware/
+	rsync -a docs/ $(JETSON):~/ecu-telemetry/docs/
+	rsync -a deploy/ $(JETSON):~/ecu-telemetry/deploy/
+	ssh $(JETSON) 'cd ~/ecu-telemetry && cmake -S firmware -B firmware/build -DCMAKE_BUILD_TYPE=Release >/dev/null && cmake --build firmware/build -j6 | tail -1 && ctest --test-dir firmware/build 2>&1 | tail -1 && (systemctl --user restart ecu-agent 2>/dev/null && echo "agent restarted" || echo "agent service not installed yet: bash ~/ecu-telemetry/deploy/jetson/install.sh")'
+jetson-logs: ## follow the agent log on the Jetson
+	ssh $(JETSON) 'journalctl --user -u ecu-agent -f -o cat'
