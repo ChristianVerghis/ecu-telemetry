@@ -115,6 +115,16 @@ Agent::Agent(const AgentOptions& opts, const Config& cfg)
   fw_string_ = fwVersionToString(fw_version_);
   physics_.setLimits(cfg_.limits);
   physics_.setCommDegraded(true);  // until the control channel is up
+  if (opts_.source != "sim") {
+    std::string root = opts_.source.rfind("sysfs:", 0) == 0 ? opts_.source.substr(6) : "";
+    sensors_ = std::make_unique<SysfsSensors>(root);
+    if (!sensors_->probe()) {
+      LOGE("--source %s: no readable sensors under %s/sys; falling back to the plant model", opts_.source.c_str(), root.c_str());
+      sensors_.reset();
+    } else {
+      LOGI("real-sensor mode (%s): %s", opts_.source.c_str(), sensors_->describe().c_str());
+    }
+  }
   Logger::instance().setLevel(cfg_.log_level);
   applyHz(cfg_.hz);
 
@@ -233,6 +243,7 @@ void Agent::tick() {
   double t = now();
   updateInjections(t);
   physics_.step(period_s_);
+  if (sensors_) readSensors();
   checkLocalAlerts();
   sendTelemetry();
 }
@@ -266,14 +277,51 @@ void Agent::updateInjections(double t) {
   }
 }
 
+// Real-sensor mode: start from the plant sample (remote fault injection and the
+// comm-degraded bit still come from it), then overwrite the motor fields with
+// what the board measures and run the same threshold checks on those.
+void Agent::readSensors() {
+  SensorReading r = sensors_->read();
+  live_ = physics_.sample();
+  if (!r.ok) return;  // keep the last live_ on a transient read failure
+  live_.temp_c = r.temp_c;
+  live_.voltage_v = r.voltage_v;
+  live_.current_a = r.current_a;
+  live_.rpm = r.rpm;
+  live_.vibration_g = 0;
+  live_.speed_kph = 0;
+  live_.lat = live_.lon = 0;
+  // Threshold checks with hysteresis: a bit sets above the limit and clears only once the
+  // reading is back under it by a margin, so a sensor hovering at the limit does not
+  // chatter at the sample rate (seen on the Jetson: 13 set/clear pairs in a minute at 52.0 C).
+  const Limits& L = physics_.limits();
+  const uint32_t was = live_detected_;
+  auto over = [&](uint32_t bit, float x, float limit, float margin) {
+    return (was & bit) ? x > limit - margin : x > limit;
+  };
+  uint32_t det = 0;
+  if (over(F_OVERTEMP, live_.temp_c, L.temp_limit_c, 1.0f)) det |= F_OVERTEMP;
+  if (over(F_OVERCURRENT, live_.current_a, L.current_limit_a, 0.05f * L.current_limit_a)) det |= F_OVERCURRENT;
+  if (opts_.undervoltage_v > 0 && live_.voltage_v > 0) {
+    const float uv = static_cast<float>(opts_.undervoltage_v);
+    if ((was & F_UNDERVOLTAGE) ? live_.voltage_v < uv + 0.1f : live_.voltage_v < uv) det |= F_UNDERVOLTAGE;
+  }
+  if (over(F_ENCODER_FAULT, live_.rpm, L.rpm_limit, 0.02f * L.rpm_limit)) det |= F_ENCODER_FAULT;
+  live_detected_ = det;
+  uint32_t flags = det | physics_.injectedFaults() | (physics_.faultFlags() & F_COMM_DEGRADED);
+  live_.fault_flags = flags;
+  live_.state = (flags & (F_OVERTEMP | F_OVERCURRENT | F_UNDERVOLTAGE | F_ENCODER_FAULT)) ? DeviceState::FAULT
+                : (flags & F_COMM_DEGRADED) ? DeviceState::DEGRADED : DeviceState::RUNNING;
+}
+
 // Device-side threshold alerts: one WARN per rising edge, one INFO on clear.
 void Agent::checkLocalAlerts() {
-  uint32_t det = physics_.detectedFaults();
+  uint32_t det = currentDetected();
   uint32_t rose = det & ~prev_detected_;
   uint32_t fell = prev_detected_ & ~det;
   prev_detected_ = det;
   if (!rose && !fell) return;
-  const Telemetry& s = physics_.sample();
+  const Telemetry& s = current();
   const Limits& L = physics_.limits();
   for (uint32_t bit = 1; bit <= F_ENCODER_FAULT; bit <<= 1) {
     if (rose & bit) {
@@ -311,7 +359,7 @@ bool Agent::openUdp() {
 
 void Agent::sendTelemetry() {
   if (udp_fd_ < 0 && !openUdp()) return;
-  const Telemetry& s = physics_.sample();
+  const Telemetry& s = current();
   uint32_t seq = udp_seq_++;  // seq advances even for dropped frames (that is the point)
   ++frames_sent_;
   if (opts_.drop_rate > 0 && drop_rng_.uniform() < opts_.drop_rate) {
@@ -523,7 +571,7 @@ void Agent::sendHeartbeat() {
 
 void Agent::sendFaultAck() {
   FaultAck a;
-  a.active_flags = physics_.faultFlags();
+  a.active_flags = current().fault_flags;
   sendFrame(MsgType::FAULT_ACK, a.encode());
 }
 

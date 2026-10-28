@@ -11,6 +11,7 @@
 #include "ecu/agent.hpp"
 #include "ecu/config.hpp"
 #include "ecu/physics.hpp"
+#include "ecu/sensors.hpp"
 #include "ecu/protocol.hpp"
 
 using namespace ecu;
@@ -402,6 +403,33 @@ void test_other_injections() {
   CHECK_EQ(nogps.faultFlags() & F_GPS_LOST, 0u);
 }
 
+// --source sysfs:ROOT against the fixture copy of the Jetson's sysfs tree.
+void test_sysfs_sensors() {
+  SysfsSensors s(std::string(ECU_FIXTURES_DIR) + "/jetson-sysfs");
+  CHECK(s.probe());
+  SensorReading r = s.read();
+  CHECK(r.ok);
+  CHECK(std::fabs(r.temp_c - 48.5f) < 0.01f);      // tj-thermal wins over the hotter cpu zone
+  CHECK(std::fabs(r.voltage_v - 4.976f) < 0.001f); // VDD_IN mV -> V
+  CHECK(std::fabs(r.current_a - 1.176f) < 0.001f); // mA -> A
+  CHECK(std::fabs(r.power_w - 4.976f * 1.176f) < 0.01f);
+  CHECK(std::fabs(r.fan_pct - 100.0f * 68 / 255) < 0.01f);
+  CHECK(std::fabs(r.rpm - 6000.0f * 68 / 255) < 0.1f);
+  CHECK(std::fabs(r.gpu_pct - 25.0f) < 0.01f);     // load file is 0..1000
+  CHECK(s.describe().find("tj-thermal") != std::string::npos);
+  CHECK(s.describe().find("VDD_IN") != std::string::npos);
+
+  // Without tj-thermal the hottest readable zone is used.
+  SysfsSensors h(std::string(ECU_FIXTURES_DIR) + "/jetson-sysfs-notj");
+  CHECK(h.probe());
+  CHECK(std::fabs(h.read().temp_c - 51.0f) < 0.01f);
+
+  // Nothing readable: probe fails, read reports !ok.
+  SysfsSensors none(std::string(ECU_FIXTURES_DIR) + "/does-not-exist");
+  CHECK(!none.probe());
+  CHECK(!none.read().ok);
+}
+
 struct TestCase {
   const char* name;
   std::function<void()> fn;
@@ -417,6 +445,7 @@ const TestCase kTests[] = {
     {"physics_behaviour", test_physics_behaviour},
     {"overtemp_injection", test_overtemp_injection},
     {"other_injections", test_other_injections},
+    {"sysfs_sensors", test_sysfs_sensors},
 };
 }  // namespace
 

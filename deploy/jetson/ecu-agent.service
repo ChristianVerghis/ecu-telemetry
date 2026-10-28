@@ -6,7 +6,7 @@ After=network-online.target tailscaled.service
 [Service]
 WorkingDirectory=%h/ecu-telemetry
 EnvironmentFile=-%h/ecu-telemetry/agent.env
-ExecStart=%h/ecu-telemetry/firmware/build/ecu_agent --id ${ECU_ID} --host ${ECU_BACKEND} --hw ${ECU_HW} --fw ${ECU_FW} --profile ${ECU_PROFILE}
+ExecStart=%h/ecu-telemetry/firmware/build/ecu_agent --id ${ECU_ID} --host ${ECU_BACKEND} --hw ${ECU_HW} --fw ${ECU_FW} --profile ${ECU_PROFILE} $ECU_EXTRA
 Restart=always
 RestartSec=3
 

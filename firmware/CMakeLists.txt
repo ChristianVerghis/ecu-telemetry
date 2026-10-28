@@ -16,6 +16,7 @@ add_library(ecu_core STATIC
   src/physics.cpp
   src/config.cpp
   src/agent.cpp
+  src/sensors.cpp
 )
 target_include_directories(ecu_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
@@ -26,6 +27,7 @@ target_link_libraries(ecu_agent PRIVATE ecu_core)
 enable_testing()
 add_executable(ecu_tests tests/test_main.cpp)
 target_link_libraries(ecu_tests PRIVATE ecu_core)
+target_compile_definitions(ecu_tests PRIVATE ECU_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures")
 set(ECU_TESTS
   crc32
   header_layout
@@ -37,6 +39,7 @@ set(ECU_TESTS
   physics_behaviour
   overtemp_injection
   other_injections
+  sysfs_sensors
 )
 foreach(t IN LISTS ECU_TESTS)
   add_test(NAME ${t} COMMAND ecu_tests ${t})
@@ -53,3 +56,8 @@ set_tests_properties(cli_bad_fault PROPERTIES WILL_FAIL TRUE)
 # Runs for 1 s against nothing listening on high ports; must exit 0.
 add_test(NAME agent_runs_offline COMMAND ecu_agent --id ECU-CTEST --duration 1 --hz 20
          --udp-port 48781 --tcp-port 48782 --fault OVERTEMP@0:1)
+# Real-sensor source against the fixture sysfs tree (what --source jetson reads on the board).
+add_test(NAME agent_runs_sysfs COMMAND ecu_agent --id ECU-CTEST --duration 1 --hz 20
+         --udp-port 48783 --tcp-port 48784 --source sysfs:${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/jetson-sysfs)
+add_test(NAME cli_bad_source COMMAND ecu_agent --id ECU-X --source sysfs:/nonexistent/root)
+set_tests_properties(cli_bad_source PROPERTIES WILL_FAIL TRUE)

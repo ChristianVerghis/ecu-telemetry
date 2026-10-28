@@ -19,7 +19,10 @@ DEFAULT_RULES: dict = {
         {"name": "temp_critical", "metric": "temp_c", "op": ">", "value": "temp_limit_c+15", "severity": "critical"},
         {"name": "current_high", "metric": "current_a", "op": ">", "value": "current_limit_a", "severity": "warn"},
         {"name": "rpm_high", "metric": "rpm", "op": ">", "value": "rpm_limit", "severity": "warn"},
-        {"name": "voltage_low", "metric": "voltage_v", "op": "<", "value": 80.0, "severity": "warn"},
+        # A threshold may carry per-device overrides, matched by device_id or by the hw_model the
+        # device announced in HELLO: the Jetson reports its 5 V input rail, not a 100 V pack.
+        {"name": "voltage_low", "metric": "voltage_v", "op": "<", "value": 80.0, "severity": "warn",
+         "overrides": [{"hw_model": "ORIN-NANO", "value": 4.5}]},
         {"name": "vibration_high", "metric": "vibration_g", "op": ">", "value": 2.5, "severity": "warn"},
     ],
     "comm": {"loss_pct": 10.0, "severity": "warn"},
@@ -76,6 +79,7 @@ class AnomalyEngine:
         self.rules = self._merge(rules or stored or {})
         self.devices: dict[str, DeviceState] = {}
         self.config_cache: dict[str, dict] = {}
+        self.hw_cache: dict[str, str] = {}
 
     # ------------------------------------------------------------ rules
     @staticmethod
@@ -104,6 +108,25 @@ class AnomalyEngine:
 
     def invalidate_config(self, device_id: str):
         self.config_cache.pop(device_id, None)
+        self.hw_cache.pop(device_id, None)
+
+    def _hw_for(self, device_id: str) -> str:
+        hw = self.hw_cache.get(device_id)
+        if hw is None:
+            row = self.db.get_device(device_id) if self.db else None
+            hw = str((row or {}).get("hw_model") or "")
+            self.hw_cache[device_id] = hw
+        return hw
+
+    def _threshold_spec(self, rule: dict, device_id: str) -> tuple:
+        """(value spec, severity) for this device: the rule's own, unless an override matches."""
+        spec, severity = rule.get("value"), rule.get("severity", "warn")
+        for o in rule.get("overrides") or []:
+            if not isinstance(o, dict):
+                continue
+            if o.get("device_id") == device_id or (o.get("hw_model") and o["hw_model"] == self._hw_for(device_id)):
+                return o.get("value", spec), o.get("severity", severity)
+        return spec, severity
 
     def _resolve_value(self, spec, cfg: dict) -> float | None:
         if isinstance(spec, (int, float)):
@@ -201,14 +224,15 @@ class AnomalyEngine:
             metric = rule.get("metric")
             if metric not in t:
                 continue
-            thr = self._resolve_value(rule.get("value"), cfg)
+            spec, severity = self._threshold_spec(rule, device_id)
+            thr = self._resolve_value(spec, cfg)
             if thr is None:
                 continue
             x = float(t[metric])
             op = rule.get("op", ">")
             cond = (x > thr) if op == ">" else (x < thr) if op == "<" else (x >= thr) if op == ">=" else (x <= thr)
             name = rule.get("name") or f"{metric}_{op}_{thr}"
-            self._mark(device_id, name, cond, now, metric, x, rule.get("severity", "warn"),
+            self._mark(device_id, name, cond, now, metric, x, severity,
                        f"{metric}={x:.2f} {op} {thr:.2f}")
             if cond:
                 fired.append(name)

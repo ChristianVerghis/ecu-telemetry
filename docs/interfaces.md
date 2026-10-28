@@ -4,6 +4,7 @@
 ```
 ecu_agent --id ECU-0001 [--host 127.0.0.1] [--udp-port 8781] [--tcp-port 8782]
           [--hz 10] [--fw 1.0.0] [--hw SIM-MOTOR-A] [--profile city|highway|idle|stress]
+          [--source sim|jetson|sysfs:ROOT] [--undervoltage V]
           [--drop-rate 0.0] [--seed 42] [--duration 0] [--config path.cfg]
           [--fault FLAGNAME@START_S:DUR_S]...  [--log-level info] [--no-gps]
 ```

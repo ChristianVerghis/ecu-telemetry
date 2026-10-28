@@ -7,11 +7,13 @@
 #include <sys/socket.h>
 
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 
 #include "ecu/config.hpp"
 #include "ecu/physics.hpp"
+#include "ecu/sensors.hpp"
 #include "ecu/protocol.hpp"
 
 namespace ecu {
@@ -38,6 +40,9 @@ struct AgentOptions {
   std::string config_path;
   std::vector<FaultSpec> faults;
   bool gps = true;
+  // "sim" (plant model), "jetson" (live sysfs), or "sysfs:ROOT" (sysfs tree under ROOT, for tests).
+  std::string source = "sim";
+  double undervoltage_v = 0;  // real-sensor mode only: bus volts below this raise UNDERVOLTAGE (0 = off)
 };
 
 class Agent {
@@ -102,6 +107,13 @@ class Agent {
   AgentOptions opts_;
   Config cfg_;
   Physics physics_;
+  // Real-sensor mode: readings replace the plant's motor fields in live_.
+  std::unique_ptr<SysfsSensors> sensors_;
+  Telemetry live_;
+  uint32_t live_detected_ = 0;
+  const Telemetry& current() const { return sensors_ ? live_ : physics_.sample(); }
+  uint32_t currentDetected() const { return sensors_ ? live_detected_ : physics_.detectedFaults(); }
+  void readSensors();
   Rng drop_rng_;
 
   uint32_t fw_version_ = 0;

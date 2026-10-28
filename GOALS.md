@@ -33,9 +33,9 @@ Board: Jetson Orin Nano Super (`ssh jetson`, Tailscale). Backend stays on the Ma
 - [ ] Note arm64 build + deploy in `docs/hardware.md`
 
 ### Day 2 · Wed 10-28 · real signals
-- [ ] `--source jetson`: temperature from `/sys/class/thermal`, VDD_IN voltage/current from the INA3221 power monitor, CPU/GPU load as motor load, so temp/voltage/current/load fields are measured, not simulated
-- [ ] Thermal-rule alert fires from a real event (run `jetson cuda` to heat the SoC) and auto-resolves
-- [ ] Unit test for the sysfs reader with fixture files
+- [x] `--source jetson`: temperature from `/sys/class/thermal`, VDD_IN voltage/current from the INA3221 power monitor, fan duty as rpm, so temp/voltage/current/rpm are measured, not simulated
+- [x] Thermal-rule alert fires from a real event (6 cores + trtexec, 52 °C limit) and auto-resolves; per-device rule overrides in the backend so the 5 V rail is not an undervoltage
+- [x] Unit test for the sysfs reader with fixture files (`sysfs_sensors`, `agent_runs_sysfs`, `cli_bad_source`)
 
 ### Day 3 · Thu 10-29 · CAN
 - [ ] `vcan0` on the Jetson + `sim/can_motor.py` publishing motor frames (RPM, temp, current) on it

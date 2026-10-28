@@ -88,3 +88,24 @@ def test_rules_roundtrip_and_config_thresholds(db):
     assert eng2.rules["thresholds"][0]["name"] == "spd"
     eng2.on_telemetry("D4", dict(BASE), 2.0)
     assert db.open_alert("D4", "spd")["severity"] == "info"
+
+
+def test_threshold_overrides_per_device_and_hw_model(db):
+    rules = {"thresholds": [{"name": "voltage_low", "metric": "voltage_v", "op": "<", "value": 80.0, "severity": "warn",
+                             "overrides": [{"device_id": "J-BY-ID", "value": 4.5},
+                                           {"hw_model": "ORIN-NANO", "value": 4.5, "severity": "critical"}]}]}
+    eng = AnomalyEngine(db, rules=rules)
+    db.upsert_device("J-BY-HW", hw_model="ORIN-NANO")
+    t0 = 1000.0
+    # A 5 V board is healthy under its override; the same reading on a 100 V device is an undervoltage.
+    assert "voltage_low" not in eng.on_telemetry("J-BY-ID", dict(BASE, voltage_v=5.0), t0)
+    assert "voltage_low" not in eng.on_telemetry("J-BY-HW", dict(BASE, voltage_v=5.0), t0)
+    assert "voltage_low" in eng.on_telemetry("D1", dict(BASE, voltage_v=5.0), t0)
+    # The override threshold still fires below it, with the override's severity.
+    assert "voltage_low" in eng.on_telemetry("J-BY-HW", dict(BASE, voltage_v=4.2), t0 + 1)
+    assert db.alerts("J-BY-HW", "open")[0]["severity"] == "critical"
+    assert db.alerts("J-BY-ID", "open") == []
+    # The default rule set carries the Jetson override.
+    default_eng = AnomalyEngine(db)
+    vl = next(r for r in default_eng.rules["thresholds"] if r["name"] == "voltage_low")
+    assert vl["overrides"][0]["hw_model"] == "ORIN-NANO"

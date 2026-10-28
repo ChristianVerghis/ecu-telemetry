@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "ecu/agent.hpp"
+#include "ecu/sensors.hpp"
 #include "ecu/config.hpp"
 #include "ecu/log.hpp"
 
@@ -36,6 +37,11 @@ void usage(FILE* out) {
                "                       D omitted or 0 = until cleared)\n"
                "  --log-level L        debug|info|warn|error      (default info)\n"
                "  --no-gps             report lat/lon as 0\n"
+               "  --source S           sim | jetson | sysfs:ROOT  (default sim). jetson reads the\n"
+               "                       board's thermal zones, INA3221 VDD_IN rail and fan instead of\n"
+               "                       the plant model; sysfs:ROOT reads the same paths under ROOT\n"
+               "  --undervoltage V     real-sensor mode: bus volts below V raise UNDERVOLTAGE\n"
+               "                       (default 4.5 for jetson, off otherwise)\n"
                "  -h, --help           this help\n"
                "\n"
                "Exit codes: 0 ok, 2 bad arguments. Network failures never exit.\n");
@@ -65,7 +71,7 @@ void onSignal(int) { ecu::Agent::requestStop(); }
 int main(int argc, char** argv) {
   ecu::AgentOptions opts;
   ecu::Config cfg;
-  bool cli_hz = false, cli_log_level = false;
+  bool cli_hz = false, cli_log_level = false, cli_uv = false;
   int hz = 10;
   ecu::LogLevel log_level = ecu::LogLevel::INFO;
 
@@ -137,12 +143,27 @@ int main(int argc, char** argv) {
     } else if (key == "--no-gps") {
       if (has_val) die("--no-gps takes no value");
       opts.gps = false;
+    } else if (key == "--source") {
+      opts.source = need();
+      if (opts.source != "sim" && opts.source != "jetson" && opts.source.rfind("sysfs:", 0) != 0)
+        die("--source must be sim, jetson or sysfs:ROOT");
+    } else if (key == "--undervoltage") {
+      if (!parseDouble(need(), d) || d < 0) die("--undervoltage must be >= 0");
+      opts.undervoltage_v = d;
+      cli_uv = true;
     } else {
       die("unknown argument '" + key + "'");
     }
   }
 
   if (opts.device_id.empty()) die("--id is required");
+  if (opts.source != "sim") {
+    // Fail fast with exit 2 if the sensor tree is not there (a typo'd root, or --source jetson on a laptop).
+    std::string root = opts.source.rfind("sysfs:", 0) == 0 ? opts.source.substr(6) : "";
+    ecu::SysfsSensors probe(root);
+    if (!probe.probe()) die("--source " + opts.source + ": no readable sensors under " + (root.empty() ? "/" : root) + "sys");
+    if (opts.source == "jetson" && !cli_uv) opts.undervoltage_v = 4.5;
+  }
   if (opts.device_id.size() > ecu::kDeviceIdLen) die("--id must be at most 12 characters");
   for (char c : opts.device_id)
     if (!std::isprint(static_cast<unsigned char>(c)) || static_cast<unsigned char>(c) > 0x7E)
