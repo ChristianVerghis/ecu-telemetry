@@ -92,6 +92,11 @@ devices:
     seed: 42
     faults: ["OVERTEMP@20:40"]        # FLAG@START_S:DUR_S, passed as --fault (repeatable)
     via_proxy: false                  # send UDP through lossy_proxy instead of the backend
+    remote:                           # optional: a real device; its agent is started over ssh, not locally
+      ssh: jetson                     #   ssh alias (must work without a prompt)
+      agent: ecu-telemetry/firmware/build/ecu_agent   # path to the agent on that machine
+      backend_host: "100.95.205.56"   #   this machine's address as the device sees it
+      extra: ["--source", "jetson"]   #   extra agent arguments
 timeline:                             # things run_sil does TO the system
   - {at_s: 30, action: fault,             device: ECU-0001, params: {set: [ENCODER_FAULT], clear: [], duration_ms: 0}}
   - {at_s: 70, action: clear_fault,       device: ECU-0001, params: {clear: [ENCODER_FAULT]}}
@@ -158,3 +163,7 @@ etc. It warns (does not fail) about events scheduled after `duration_s`.
 ## bench.py
 
 `python sim/bench.py` (`make bench`) starts its own backend on free ports and measures ingest throughput at rising load, device-to-backend transit and fault-to-alert latency, and the loss the backend infers at several proxy drop rates. It prints markdown tables; the committed results are in `docs/measurements.md`. `--only throughput|latency|loss` runs one part.
+
+## Real devices in a scenario
+
+A device with a `remote` block is not spawned locally: the runner starts its agent with `ssh -tt <alias> <agent> ...`, pointed at `backend_host` and this run's ports. The pseudo-terminal matters: when the runner stops the ssh client, the remote agent dies with it, so nothing is left running on the device and nothing has to be installed there. `scenarios/jetson.yml` (`make demo-jetson`) puts a Jetson Orin Nano next to three simulated ECUs this way. It is not in the CI matrix, since CI has no board.

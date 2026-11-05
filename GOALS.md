@@ -74,9 +74,9 @@ The demo must run on the Mac alone; the Jetson is a bonus when it is reachable. 
 - [x] Numbers to quote (`make bench`, `docs/measurements.md`): 10,000 frames/s with no loss on one core; fault to alert 91 ms median; transit 0.7 ms; measured loss within about a point of injected from 5 to 50 %
 
 ### D4 · the real device (needs the Jetson reachable)
-- [ ] (owner) Re-authenticate Tailscale SSH and run `deploy/jetson/install.sh` on the board once
-- [ ] `ECU-JETSON-1` live in the demo fleet next to the simulated devices; storyline has an optional real-board step (load the cores, real OVERTEMP)
-- [ ] OTA push to the real service from the dashboard, HELLO comes back with the new version (Jetson week Day 4)
+- [x] (owner) Re-authenticate Tailscale SSH (done 11-05). `deploy/jetson/install.sh` is still not run: the demo no longer needs the service, it starts the agent over ssh; install it only to have the board stream permanently
+- [x] `ECU-JETSON-1` live in a demo fleet next to simulated devices: `make demo-jetson` (`sim/scenarios/jetson.yml`, agent started over ssh); the real-board step is a config push to a 40 °C limit, which trips the board's own protection on its measured 49.7 °C
+- [x] OTA push to the board, HELLO comes back as 1.2.0 (in `jetson.yml`; in-process reboot of the agent, not a service restart, since the service is not installed)
 - [ ] `vcan0` + `sim/can_motor.py` + `--source can` (Jetson week Day 3), if CAN is worth showing for the role
 
 ## Next

@@ -167,6 +167,12 @@ def validate_scenario(sc: dict) -> list[str]:
             name, start, dur = parse_fault_spec(spec)
             if start + dur > sc["duration_s"]:
                 warnings.append(f"{did}: fault {spec} extends past duration_s")
+        if "remote" in d:
+            rm = d["remote"]
+            _require(isinstance(rm, dict) and all(isinstance(rm.get(k), str) and rm.get(k) for k in ("ssh", "agent", "backend_host")),
+                     f"{did}: remote needs ssh, agent and backend_host strings")
+            _require(isinstance(rm.get("extra", []), list), f"{did}: remote.extra must be a list of arguments")
+            _require(not d.get("via_proxy"), f"{did}: a remote device cannot go through the local proxy")
         if d.get("via_proxy") and "proxy" not in sc:
             warnings.append(f"{did}: via_proxy set but scenario has no 'proxy' block (needs --via-proxy/--proxy-port)")
 
@@ -704,7 +710,15 @@ class Runner:
         be = self.sc["backend"]
         via = d.get("via_proxy") or d["id"] in self.args.via_proxy
         udp_port = self.sc["proxy"]["listen"] if via else be["udp_port"]
-        cmd = [str(self.args.agent), "--id", d["id"], "--host", "127.0.0.1",
+        rm = d.get("remote")
+        if rm:
+            # A real device: run its agent over ssh, pointed back at this machine. -tt gives the remote
+            # process a terminal, so it dies with the ssh client when the runner stops it.
+            head = ["ssh", "-tt", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", rm["ssh"], rm["agent"]]
+            host = rm["backend_host"]
+        else:
+            head, host = [str(self.args.agent)], "127.0.0.1"
+        cmd = [*head, "--id", d["id"], "--host", host,
                "--udp-port", str(udp_port), "--tcp-port", str(be["tcp_port"]),
                "--hz", str(d.get("hz", 10)), "--fw", str(d.get("fw", "1.0.0")),
                "--hw", str(d.get("hw", "SIM-MOTOR-A")), "--profile", d.get("profile", "city"),
@@ -716,6 +730,8 @@ class Runner:
             cmd += ["--fault", spec]
         if d.get("no_gps"):
             cmd.append("--no-gps")
+        if rm:
+            cmd += [str(x) for x in rm.get("extra", [])]
         return cmd
 
     # ----- main loop -----
@@ -738,7 +754,7 @@ class Runner:
             proxy_ctl = self.start_proxy()
 
             agent = Path(args.agent)
-            if not agent.exists():
+            if not agent.exists() and not all("remote" in d for d in sc["devices"]):
                 raise RuntimeError(f"agent binary not found: {agent} (build firmware or pass --agent)")
             for d in sc["devices"]:
                 self.spawn(f"agent:{d['id']}", self.agent_cmd(d))

@@ -1,0 +1,47 @@
+name: jetson
+description: >
+  A real board next to a simulated fleet. Three simulated ECUs run locally and
+  the Jetson Orin Nano's agent is started over ssh with --source jetson, so its
+  temperature, voltage and current are measured. A config push sets its
+  temperature limit below the junction temperature it is reading, its own
+  protection trips on a real value, and the limit is restored. Then firmware
+  1.2.0 is deployed to the board. Needs `ssh jetson` to work without a prompt
+  and the board to reach this machine at remote.backend_host.
+duration_s: 90
+backend: {http: "http://127.0.0.1:8780", udp_port: 8781, tcp_port: 8782}
+devices:
+  - {id: ECU-0001, profile: highway, fw: 1.0.0, hw: SIM-MOTOR-A, hz: 10, drop_rate: 0.0, seed: 201}
+  - {id: ECU-0002, profile: city,    fw: 1.0.0, hw: SIM-MOTOR-A, hz: 10, drop_rate: 0.0, seed: 202}
+  - {id: ECU-0003, profile: idle,    fw: 1.0.0, hw: SIM-MOTOR-B, hz: 5,  drop_rate: 0.0, seed: 203}
+  - id: ECU-JETSON-1
+    hw: ORIN-NANO
+    fw: 1.1.0
+    hz: 10
+    remote:
+      ssh: jetson                                        # ssh alias of the board
+      agent: ecu-telemetry/firmware/build/ecu_agent      # built there by `make jetson-deploy`
+      backend_host: "100.95.205.56"                      # this machine as the board sees it (tailnet address)
+      extra: ["--source", "jetson"]
+timeline:
+  - {at_s: 2, action: note, say: "1/3 Three simulated ECUs and one real board. ECU-JETSON-1 reports its measured junction temperature, input rail and fan."}
+  - {at_s: 18, action: config, device: ECU-JETSON-1,
+     params: {telemetry_hz: 10, log_level: "info", rpm_limit: 6000, temp_limit_c: 40.0, current_limit_a: 120},
+     say: "2/3 Config push to the board: temp limit 40 C, below what it is reading. Its own protection trips on a real measurement."}
+  - {at_s: 38, action: config, device: ECU-JETSON-1,
+     params: {telemetry_hz: 10, log_level: "info", rpm_limit: 6000, temp_limit_c: 90.0, current_limit_a: 120},
+     say: "    Limit restored to 90 C."}
+  - {at_s: 50, action: firmware_register, params: {version: "1.2.0", notes: "jetson rollout", size_bytes: 1000000},
+     say: "3/3 OTA to the board: firmware 1.2.0. It acks, drops its connection, comes back and says HELLO with the new version."}
+  - {at_s: 52, action: firmware_deploy, device: ECU-JETSON-1, params: {version: "1.2.0"}}
+expect:
+  - {at_s: 14, check: device_state, device: ECU-JETSON-1, params: {online: true, has_telemetry: true}}
+  - {at_s: 14, check: device_state, device: ECU-0001, params: {online: true, has_telemetry: true}}
+  - {at_s: 14, check: device_fw,    device: ECU-JETSON-1, params: {version: "1.1.0"}}
+  - {at_s: 24, check: config_version, device: ECU-JETSON-1, params: {min: 2, acked: true}}
+  - {at_s: 28, check: alert_open,   device: ECU-JETSON-1, params: {match: OVERTEMP}}
+  - {at_s: 28, check: device_state, device: ECU-JETSON-1, params: {state: [DEGRADED, FAULT], fault_flags_any: [OVERTEMP]}}
+  - {at_s: 58, check: alert_resolved, device: ECU-JETSON-1, params: {match: OVERTEMP}}
+  - {at_s: 70, check: device_fw,    device: ECU-JETSON-1, params: {version: "1.2.0"}}
+  - {at_s: 72, check: device_state, device: ECU-JETSON-1, params: {online: true, has_telemetry: true}}
+  - {at_s: 78, check: loss_pct_gt,  device: ECU-JETSON-1, params: {value: 5, invert: true}}
+  - {at_s: 84, check: no_alerts_of_severity, params: {severity: critical}}

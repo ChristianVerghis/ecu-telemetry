@@ -50,6 +50,24 @@ Config v2 pushed from the backend (`temp_limit_c` 52, applied over the control c
 
 The backend's fixed 80 V `voltage_low` rule would have been permanently true for a 5 V board, so threshold rules now take per-device `overrides` matched by `device_id` or `hw_model`; the default rules carry `{"hw_model": "ORIN-NANO", "value": 4.5}`.
 
+## In the demo fleet (2026-11-05)
+
+`make demo-jetson` runs `sim/scenarios/jetson.yml`: three simulated ECUs started locally and this board's agent started over ssh with `--source jetson`, all against one fresh backend. No service has to be installed for it; the agent lives as long as the run does.
+
+![ECU-JETSON-1 during the config-push step](img/jetson.png)
+
+What the scenario does to the board, and asserts (11 checks, 11/11 on three consecutive runs):
+
+- it comes online with telemetry at firmware 1.1.0
+- a config push sets `temp_limit_c` to 40, the board acks version 2, and its own protection raises `OVERTEMP` on the temperature it is measuring (49.7 °C); the backend opens `flag:OVERTEMP` and `temp_high`
+- the limit goes back to 90 and both alerts resolve
+- firmware 1.2.0 is deployed: the agent acks, drops its connection, comes back and says HELLO as 1.2.0
+- loss over Tailscale stays at 0.0 %
+
+The OTA here restarts the agent in-process and the version is whatever `--fw` says at the next start; nothing is written to the board. CTest on the board is 19/19, including the golden frames.
+
+`transit_ms` for this device reads about -55 ms. It is receive time on the Mac minus the timestamp the board put in the frame, so it carries the difference between the two clocks: the board's is ahead by more than the network takes. One-way latency cannot be read off two unsynchronised clocks; the number is only meaningful for devices on the backend's own clock.
+
 ## Next on this board
 
 See `GOALS.md` → "Jetson week": real sensors (`/sys/class/thermal`, INA3221), SocketCAN source, OTA to the real service, SIL with a mixed fleet, arm64 container image.

@@ -77,7 +77,10 @@ function lineChart(c, series, opts) {
   const pw = w - padL - padR, ph = hh - padT - padB;
   let mn = Infinity, mx = -Infinity;
   for (const s of series) { for (const [, v] of s.pts) { if (v < mn) mn = v; if (v > mx) mx = v; } if (s.band) for (const [, a, b] of s.band) { if (a < mn) mn = a; if (b > mx) mx = b; } }
-  if (opts.limit !== undefined && opts.limit !== null && isFinite(opts.limit)) { mn = Math.min(mn, opts.limit); mx = Math.max(mx, opts.limit); }
+  // a limit far from the data (a 6000 rpm limit over a 1700 rpm fan) would flatten the trace: only show one that is near
+  const lim = opts.limit, showLim = lim !== undefined && lim !== null && isFinite(lim) && isFinite(mn) &&
+    ((lim >= mn && lim <= mx) || Math.min(Math.abs(lim - mn), Math.abs(lim - mx)) <= 0.5 * Math.max(Math.abs(mn), Math.abs(mx)));
+  if (showLim) { mn = Math.min(mn, lim); mx = Math.max(mx, lim); }
   if (!isFinite(mn)) { ctx.fillStyle = "#4b5563"; ctx.fillText("no data", padL + 8, hh / 2); return; }
   if (mx - mn < 1e-9) { mn -= 1; mx += 1; } const pad = (mx - mn) * 0.08; mn -= pad; mx += pad;
   const t0 = opts.t0, t1 = opts.t1;
@@ -86,7 +89,7 @@ function lineChart(c, series, opts) {
   for (let i = 0; i <= 4; i++) { const v = mn + (mx - mn) * i / 4, y = Y(v); ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(w - padR, y); ctx.stroke(); ctx.fillText(fmt(v, opts.decimals), padL - 4, y + 3); }
   ctx.textAlign = "center";
   for (let i = 0; i <= 4; i++) { const t = t0 + (t1 - t0) * i / 4; ctx.fillText(new Date(t).toLocaleTimeString([], { hour12: false, hour: "2-digit", minute: "2-digit", second: (t1 - t0) < 900e3 ? "2-digit" : undefined }), X(t), hh - 3); }
-  if (opts.limit !== undefined && opts.limit !== null && isFinite(opts.limit)) { ctx.setLineDash([4, 4]); ctx.strokeStyle = "#ff4d5e88"; ctx.beginPath(); ctx.moveTo(padL, Y(opts.limit)); ctx.lineTo(w - padR, Y(opts.limit)); ctx.stroke(); ctx.setLineDash([]); }
+  if (showLim) { ctx.setLineDash([4, 4]); ctx.strokeStyle = "#ff4d5e88"; ctx.beginPath(); ctx.moveTo(padL, Y(lim)); ctx.lineTo(w - padR, Y(lim)); ctx.stroke(); ctx.setLineDash([]); }
   for (const s of series) {
     if (s.band && s.band.length > 1) { ctx.beginPath(); s.band.forEach(([t, a], i) => i ? ctx.lineTo(X(t), Y(a)) : ctx.moveTo(X(t), Y(a))); for (let i = s.band.length - 1; i >= 0; i--) ctx.lineTo(X(s.band[i][0]), Y(s.band[i][2])); ctx.closePath(); ctx.fillStyle = s.color + "22"; ctx.fill(); }
     if (s.pts.length) { ctx.beginPath(); s.pts.forEach(([t, v], i) => i ? ctx.lineTo(X(t), Y(v)) : ctx.moveTo(X(t), Y(v))); ctx.strokeStyle = s.color; ctx.lineWidth = 1.4; ctx.stroke(); }

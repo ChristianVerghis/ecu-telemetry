@@ -42,7 +42,19 @@ After the story the fleet stays up. Good things to click:
 
 ## With the Jetson
 
-The story does not depend on the board. The demo's backend listens for devices on all interfaces, so the Jetson's agent can join as a seventh device when the demo is on the default ports (8780-8782, which means stopping any other backend first). That has been run against the long-running backend, where the real thermal event in [hardware.md](hardware.md) was recorded, but not yet against `make demo`.
+```bash
+make demo-jetson    # three simulated ECUs and the real board; 90 seconds, then stays up
+```
+
+This needs `ssh jetson` to work without a prompt and the board to reach this laptop over the tailnet. The runner starts the board's agent over ssh and stops it when the run ends, so nothing has to be installed or left running there.
+
+| When | What happens | What to say |
+|---|---|---|
+| 0-15 | `ECU-JETSON-1` appears next to three simulated devices. | Same binary, built on the board for arm64. Its temperature, input voltage and current are read from the board's own sensors. |
+| 18 | A config push sets its temperature limit to 40 °C. At 38 it is restored. | The board is reading about 50 °C, so its own protection trips on a real measurement. This is the same path as step 4 of the main story, on hardware. |
+| 50 | Firmware 1.2.0 is deployed to it. | It acks, drops the connection, comes back and reports the new version. Only the exchange is real: no image is written to the board. |
+
+If the board is unreachable, skip this part; the main story does not use it. The first real thermal event recorded on the board, with the cores and GPU loaded, is in [hardware.md](hardware.md).
 
 ## Questions this raises
 

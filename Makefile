@@ -5,6 +5,7 @@
 #   make sil SCENARIO=sim/scenarios/thermal_runaway.yml
 #   make fleet N=8 PROFILES=city,highway DROP=0.02
 #   make demo                          fresh database + backend + 6 ECUs, stays up until Ctrl-C
+#   make demo-jetson                   the same idea with the real board in the fleet (needs `ssh jetson`)
 #   make up                            docker compose up --build
 #   make clean
 
@@ -28,7 +29,7 @@ COMPOSE        ?= docker compose
 # auto = 8780-8782 when free, else the first free triple from 8790; or a port number
 DEMO_PORTS     ?= auto
 
-.PHONY: jetson-deploy jetson-logs demo demo-check bench help build venv test test-firmware test-backend test-integration sil sil-all validate fleet up down clean
+.PHONY: jetson-deploy jetson-logs demo demo-check demo-jetson bench help build venv test test-firmware test-backend test-integration sil sil-all validate fleet up down clean
 
 help: ## list targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
@@ -74,6 +75,9 @@ demo: build venv ## one command: fresh database, backend, 6 simulated ECUs; prin
 
 demo-check: build venv ## run the demo timeline once as a test and exit (no hold)
 	$(PY) sim/run_sil.py sim/scenarios/demo.yml --agent $(AGENT) --start-backend --ports $(DEMO_PORTS)
+
+demo-jetson: build venv ## three simulated ECUs plus the real Jetson, started over ssh; stays up until Ctrl-C
+	$(PY) sim/run_sil.py sim/scenarios/jetson.yml --agent $(AGENT) --start-backend --ports $(DEMO_PORTS) --hold
 
 bench: build venv ## measure throughput, latency and loss on this machine (about 4 minutes, markdown tables)
 	$(PY) sim/bench.py --agent $(AGENT)

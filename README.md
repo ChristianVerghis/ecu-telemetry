@@ -45,12 +45,12 @@ Working on EV and automotive systems means living at the seam between firmware o
 As of 2026-11-05:
 
 **Works**
-- Firmware agent builds with CMake and passes its 19 CTest tests (CRC, header layout, codec round-trips, golden frames, fault parsing, config parsing, physics determinism and fault behaviour, the sysfs sensor reader against a fixture tree, plus CLI and offline-run smoke tests) on macOS and in CI on Linux; it also builds natively on the Jetson (arm64).
+- Firmware agent builds with CMake and passes its 19 CTest tests (CRC, header layout, codec round-trips, golden frames, fault parsing, config parsing, physics determinism and fault behaviour, the sysfs sensor reader against a fixture tree, plus CLI and offline-run smoke tests) on macOS and in CI on Linux; the same 19 pass on the Jetson (arm64).
 - Backend passes 30 pytest tests (protocol, db, anomaly, API); integration tests run a real agent against a real backend.
-- All seven SIL scenarios validate; `baseline_fleet`, `thermal_runaway` and `demo` (the `make demo` walkthrough, 21 checks) run in CI on every push.
+- All eight SIL scenarios validate; `baseline_fleet`, `thermal_runaway` and `demo` (the `make demo` walkthrough, 21 checks) run in CI on every push.
 - Fleet launcher, lossy proxy, dashboard, alerts, config push, simulated OTA, and log shipping all exercised end to end locally.
 - Dashboard charts cover 5 m (raw), 1 h (10 s buckets), 24 h and 7 d (1-minute rollups, which are kept after raw samples are pruned at 24 h).
-- A real device: the agent runs on a Jetson Orin Nano Super with `--source jetson`, and a real thermal event has gone through the whole chain (see below).
+- A real device: the agent runs on a Jetson Orin Nano Super with `--source jetson`, and a real thermal event has gone through the whole chain (see below). `make demo-jetson` puts the board in a fleet with simulated devices and checks a config push, a real over-temperature and an OTA against it (11 checks).
 - GitHub Actions CI (firmware, backend, integration, SIL matrix, compose build) and a tagged release workflow (Linux amd64/arm64 binaries, GHCR images).
 
 **Rough edges**
@@ -65,6 +65,10 @@ The first real device is a Jetson Orin Nano Super. The backend stays on a laptop
 With `--source jetson` the agent reads the board instead of the plant model: junction temperature from `/sys/class/thermal`, input voltage and current from the INA3221 power monitor, and fan duty as rpm. Device-side limits, fault flags, and state then run on measured values.
 
 One real event, start to finish: a config push lowered `temp_limit_c` to 52 °C over the control channel, then all six cores and the GPU were loaded for 75 s. Junction temperature went from 48.5 to 54.8 °C, the device raised `OVERTEMP` and entered `FAULT`, the backend opened `temp_high` and `flag:OVERTEMP`, and both alerts resolved on their own about three minutes later once the board had cooled.
+
+![The Jetson's device page while its own protection is tripped](docs/img/jetson.png)
+
+*`make demo-jetson`: a config push has set the board's limit to 40 °C, below the 49.8 °C it is measuring, and it has raised OVERTEMP itself.*
 
 Two changes came out of running on hardware. Device-side thresholds gained hysteresis, because a board hovering at exactly its limit produced 13 set/clear pairs in a minute. Backend threshold rules gained per-device overrides, because the fixed 80 V undervoltage rule was permanently true for a 5 V board. Details in [docs/hardware.md](docs/hardware.md).
 
@@ -140,7 +144,7 @@ backend/.venv/bin/python -m pytest -q backend/tests     # protocol / db / anomal
 backend/.venv/bin/python -m pytest -q tests/integration # real agent <-> real backend
 ```
 
-`make help` lists the equivalent Make targets (`build`, `test`, `demo`, `bench`, `sil`, `sil-all`, `fleet`, `up`, `clean`, `jetson-deploy`, `jetson-logs`).
+`make help` lists the equivalent Make targets (`build`, `test`, `demo`, `demo-jetson`, `bench`, `sil`, `sil-all`, `fleet`, `up`, `clean`, `jetson-deploy`, `jetson-logs`).
 
 Set `ANTHROPIC_API_KEY` to enable Claude-backed diagnostics; without it the heuristic diagnostician answers and results are tagged `model: "heuristic"`.
 
