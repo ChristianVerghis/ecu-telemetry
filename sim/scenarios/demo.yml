@@ -5,7 +5,7 @@ description: >
   config push that trips a device's own protection, a staggered OTA rollout,
   and a degraded link measured from sequence gaps. Everything recovers and the
   alerts close on their own. Each step asserts what it claims.
-duration_s: 180
+duration_s: 185
 backend: {http: "http://127.0.0.1:8780", udp_port: 8781, tcp_port: 8782}
 proxy: {listen: 9781, control_port: 9790, drop: 0.0, delay_ms: 0, jitter_ms: 0, reorder: 0.0, dup: 0.0}
 devices:
@@ -38,8 +38,8 @@ timeline:
   # 6. degraded link
   - {at_s: 110, action: proxy_set, params: {drop: 0.3},
      say: "6/6 ECU-0005's link now drops 30 % of its packets. Loss is measured from sequence gaps; watch its loss % climb."}
-  - {at_s: 135, action: proxy_set, params: {drop: 0.0}, say: "    Link restored. Loss falls as the window refills."}
-  - {at_s: 176, action: note, say: "Done. The alerts the story opened have closed on their own."}
+  - {at_s: 138, action: proxy_set, params: {drop: 0.0}, say: "    Link restored. Loss falls as the window refills."}
+  - {at_s: 181, action: note, say: "Done. The alerts the story opened have closed on their own."}
 expect:
   - {at_s: 12, check: device_state, device: ECU-0001, params: {online: true, has_telemetry: true, state: [IDLE, RUNNING]}}
   - {at_s: 12, check: device_state, device: ECU-0002, params: {online: true, has_telemetry: true}}
@@ -57,8 +57,9 @@ expect:
   - {at_s: 105, check: device_fw,   device: ECU-0003, params: {version: "1.1.0"}}
   - {at_s: 105, check: device_fw,   device: ECU-0006, params: {version: "1.0.0"}}
   - {at_s: 108, check: alert_resolved, device: ECU-0001, params: {match: OVERTEMP}}
-  - {at_s: 125, check: loss_pct_gt, device: ECU-0005, params: {value: 10}}
-  - {at_s: 128, check: alert_open,  device: ECU-0005, params: {match: ["loss", "comm"]}}
-  - {at_s: 128, check: loss_pct_gt, device: ECU-0006, params: {value: 1, invert: true}}
-  - {at_s: 170, check: alert_resolved, device: ECU-0005, params: {match: ["loss", "comm"]}}
-  - {at_s: 174, check: no_alerts_of_severity, params: {severity: critical}}
+  # loss is measured over the last 200 received frames, so it is judged 22 s in, not at once
+  - {at_s: 132, check: loss_pct_gt, device: ECU-0005, params: {value: 10}}
+  - {at_s: 132, check: alert_open,  device: ECU-0005, params: {match: ["loss", "comm"]}}
+  - {at_s: 132, check: loss_pct_gt, device: ECU-0006, params: {value: 1, invert: true}}
+  - {at_s: 175, check: alert_resolved, device: ECU-0005, params: {match: ["loss", "comm"]}}
+  - {at_s: 179, check: no_alerts_of_severity, params: {severity: critical}}

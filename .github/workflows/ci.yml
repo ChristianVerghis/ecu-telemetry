@@ -80,7 +80,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        scenario: [baseline_fleet, thermal_runaway]
+        scenario: [baseline_fleet, thermal_runaway, demo]   # demo is what `make demo` runs
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

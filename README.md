@@ -43,7 +43,7 @@ As of 2026-11-05:
 **Works**
 - Firmware agent builds with CMake and passes its 18 CTest tests (CRC, header layout, codec round-trips, fault parsing, config parsing, physics determinism and fault behaviour, the sysfs sensor reader against a fixture tree, plus CLI and offline-run smoke tests) on macOS and in CI on Linux; it also builds natively on the Jetson (arm64).
 - Backend passes 29 pytest tests (protocol, db, anomaly, API); integration tests run a real agent against a real backend.
-- All six SIL scenarios validate; `baseline_fleet` and `thermal_runaway` run in CI on every push.
+- All seven SIL scenarios validate; `baseline_fleet`, `thermal_runaway` and `demo` (the `make demo` walkthrough, 21 checks) run in CI on every push.
 - Fleet launcher, lossy proxy, dashboard, alerts, config push, simulated OTA, and log shipping all exercised end to end locally.
 - Dashboard charts cover 5 m (raw), 1 h (10 s buckets), 24 h and 7 d (1-minute rollups, which are kept after raw samples are pruned at 24 h).
 - A real device: the agent runs on a Jetson Orin Nano Super with `--source jetson`, and a real thermal event has gone through the whole chain (see below).
