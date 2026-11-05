@@ -15,6 +15,7 @@ Examples:
     python sim/run_sil.py sim/scenarios/thermal_runaway.yml --start-backend
     python sim/run_sil.py sim/scenarios/lossy_link.yml --backend http://localhost:8780
     python sim/run_sil.py --validate sim/scenarios/*.yml
+    python sim/run_sil.py sim/scenarios/demo.yml --start-backend --ports auto --hold   # `make demo`
 """
 from __future__ import annotations
 
@@ -22,6 +23,7 @@ import argparse
 import json
 import os
 import signal
+import socket
 import subprocess
 import sys
 import time
@@ -49,7 +51,7 @@ FAULT_NAMES = {
 }
 STATE_NAMES = {0: "IDLE", 1: "RUNNING", 2: "DEGRADED", 3: "FAULT"}
 PROFILES = {"city", "highway", "idle", "stress"}
-ACTIONS = {"fault", "clear_fault", "config", "firmware_register", "firmware_deploy", "cmd", "proxy_set"}
+ACTIONS = {"fault", "clear_fault", "config", "firmware_register", "firmware_deploy", "cmd", "proxy_set", "note"}
 CHECKS = {
     "alert_open", "alert_resolved", "device_state", "device_fw", "config_version",
     "loss_pct_gt", "diagnosis_nonempty", "no_alerts_of_severity",
@@ -176,6 +178,9 @@ def validate_scenario(sc: dict) -> list[str]:
         _require(ev["action"] in ACTIONS, f"timeline[{i}].action {ev['action']!r} not in {sorted(ACTIONS)}")
         params = ev.get("params", {}) or {}
         _require(isinstance(params, dict), f"timeline[{i}].params must be a mapping")
+        _require(isinstance(ev.get("say", ""), str), f"timeline[{i}].say must be a string")
+        if ev["action"] == "note":
+            _require(ev.get("say"), f"timeline[{i}] note needs a 'say' string")
         if ev["action"] in DEVICE_ACTIONS:
             _require(ev.get("device") in ids, f"timeline[{i}] ({ev['action']}) device {ev.get('device')!r} not in devices")
         if ev["action"] == "fault":
@@ -230,6 +235,50 @@ def load_scenario(path: Path) -> dict:
         sc = yaml.safe_load(f)
     validate_scenario(sc)
     return sc
+
+
+# --------------------------------------------------------------------------- #
+# Ports: --ports BASE puts http/udp/tcp on BASE, BASE+1, BASE+2
+# --------------------------------------------------------------------------- #
+def ports_free(base: int) -> bool:
+    """True when nothing listens on http (tcp BASE) or control (tcp BASE+2) and telemetry (udp BASE+1)
+    can be bound. TCP is probed by connecting: a bind test also trips on ports still in TIME_WAIT
+    from the previous run, which would move every back-to-back run to new ports."""
+    for port in (base, base + 2):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sk:
+            sk.settimeout(0.5)
+            if sk.connect_ex(("127.0.0.1", port)) == 0:
+                return False
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sk:
+        try:
+            sk.bind(("0.0.0.0", base + 1))
+        except OSError:
+            return False
+    return True
+
+
+def apply_ports(sc: dict, spec: str) -> str | None:
+    """Rewrite sc['backend'] for --ports. 'auto' keeps the scenario's ports when they are free and
+    otherwise takes the first free triple from 8790 up. Returns a note to print, or None."""
+    from urllib.parse import urlparse
+    be = sc["backend"]
+    want = urlparse(be["http"]).port or 8780
+    note = None
+    if spec == "auto":
+        base = want if ports_free(want) else next((b for b in range(8790, 8990, 10) if ports_free(b)), None)
+        if base is None:
+            raise SchemaError("--ports auto: no free port triple between 8790 and 8980")
+        if base != want:
+            note = f"ports {want}-{want + 2} are in use; this run is on {base}-{base + 2}"
+    else:
+        try:
+            base = int(spec)
+        except ValueError:
+            raise SchemaError(f"--ports must be 'auto' or a port number, not {spec!r}")
+        if not 1024 <= base <= 65533:
+            raise SchemaError("--ports must be between 1024 and 65533")
+    be.update({"http": f"http://127.0.0.1:{base}", "udp_port": base + 1, "tcp_port": base + 2})
+    return note
 
 
 # --------------------------------------------------------------------------- #
@@ -492,6 +541,8 @@ def eval_check(api: Api, e: dict) -> tuple[bool, str]:
 # --------------------------------------------------------------------------- #
 def run_action(api: Api, ev: dict, proxy_ctl: str | None) -> str:
     act, did, p = ev["action"], ev.get("device"), dict(ev.get("params", {}) or {})
+    if act == "note":
+        return "-"
     if act == "fault":
         body = {"set": p["set"], "clear": p.get("clear", []), "duration_ms": int(p.get("duration_ms", 0))}
         api.post(f"/api/devices/{did}/fault", body)
@@ -592,6 +643,9 @@ class Runner:
         from urllib.parse import urlparse
         be = self.sc["backend"]
         http_port = urlparse(be["http"]).port or 8780
+        if api.health_ok():
+            # without this the run would quietly use that backend and its old database
+            raise RuntimeError(f"a backend is already serving {be['http']}; stop it or pass --ports auto")
         env = dict(os.environ)
         env.update({
             "ECU_HTTP_PORT": str(http_port),
@@ -653,8 +707,9 @@ class Runner:
                "--hz", str(d.get("hz", 10)), "--fw", str(d.get("fw", "1.0.0")),
                "--hw", str(d.get("hw", "SIM-MOTOR-A")), "--profile", d.get("profile", "city"),
                "--drop-rate", str(d.get("drop_rate", 0.0)), "--seed", str(d.get("seed", 1)),
-               "--duration", str(int(self.sc["duration_s"]) + 10),
                "--log-level", d.get("log_level", "info")]
+        if not self.args.hold:   # under --hold agents run until the runner stops them
+            cmd += ["--duration", str(int(self.sc["duration_s"]) + 10)]
         for spec in d.get("faults", []) or []:
             cmd += ["--fault", spec]
         if d.get("no_gps"):
@@ -685,6 +740,7 @@ class Runner:
                 raise RuntimeError(f"agent binary not found: {agent} (build firmware or pass --agent)")
             for d in sc["devices"]:
                 self.spawn(f"agent:{d['id']}", self.agent_cmd(d))
+            log(C.bold(f"dashboard: {api.base}"), self.t0)
 
             # Merge timeline + expectations into one schedule, ordered by time.
             sched: list[tuple[float, str, dict]] = [(float(ev["at_s"]), "action", ev) for ev in sc["timeline"]]
@@ -702,6 +758,10 @@ class Runner:
                 for msg in dead:
                     log(C.red(f"WARNING: {msg}"), self.t0)
                 if kind == "action":
+                    if item.get("say"):
+                        log(C.bold(f">>> {item['say']}"), self.t0)
+                    if item["action"] == "note":
+                        continue
                     try:
                         detail = run_action(api, item, proxy_ctl)
                         ok = True
@@ -722,6 +782,8 @@ class Runner:
             remaining = clock0 + end_at - time.time()
             if remaining > 0 and not args.fail_fast:
                 time.sleep(min(remaining, 2.0))
+            if args.hold:
+                self.hold(api, results)
         except KeyboardInterrupt:
             fatal = "interrupted"
             log(C.red("interrupted — shutting down children"), self.t0)
@@ -750,6 +812,17 @@ class Runner:
             "ok": fatal is None and passed == len(sc["expect"]),
         }
         return report
+
+    def hold(self, api: Api, results: list[dict]):
+        """--hold: the timeline is done; keep backend and fleet up until Ctrl-C."""
+        passed = sum(1 for r in results if r["ok"])
+        log(C.bold(f"timeline done, {passed}/{len(self.sc['expect'])} expectations passed. "
+                   f"Fleet stays up at {api.base} until Ctrl-C."), self.t0)
+        try:
+            while True:
+                time.sleep(1.0)
+        except KeyboardInterrupt:
+            log("stopping", self.t0)
 
     def eval_with_grace(self, api: Api, e: dict) -> tuple[bool, str]:
         deadline = time.time() + self.args.grace
@@ -808,6 +881,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--proxy-port", type=int, default=9781, help="proxy listen port when scenario has no proxy block")
     p.add_argument("--grace", type=float, default=GRACE_S, help="seconds to keep polling an expectation")
     p.add_argument("--fail-fast", action="store_true", help="stop at the first failed expectation")
+    p.add_argument("--ports", default=None, metavar="BASE|auto",
+                   help="put http/udp/tcp on BASE, BASE+1, BASE+2 instead of the scenario's ports; "
+                        "'auto' keeps the scenario's ports when free, else the first free triple from 8790")
+    p.add_argument("--hold", action="store_true",
+                   help="after the timeline, keep backend and agents running until Ctrl-C (for demos)")
     p.add_argument("--no-color", action="store_true")
     return p
 
@@ -839,6 +917,7 @@ def main(argv=None) -> int:
         return 2
     try:
         sc = load_scenario(Path(args.scenario[0]))
+        port_note = apply_ports(sc, args.ports) if args.ports else None
     except (SchemaError, yaml.YAMLError, OSError) as ex:
         print(f"scenario error: {ex}", file=sys.stderr)
         return 2
@@ -850,6 +929,8 @@ def main(argv=None) -> int:
 
     signal.signal(signal.SIGTERM, _on_term)
     log(C.bold(f"scenario {sc['name']}: {sc['description'].strip()}"))
+    if port_note:
+        log(C.yellow(port_note))
     report = runner.run()
     print_table(report)
     out = write_report(report)

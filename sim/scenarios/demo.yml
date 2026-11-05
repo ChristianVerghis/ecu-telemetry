@@ -1,0 +1,26 @@
+name: demo
+description: >
+  The walkthrough fleet behind `make demo`: six simulated ECUs on a fresh
+  database, one of them routed through the lossy proxy. Brings the fleet up
+  and checks it is healthy.
+duration_s: 25
+backend: {http: "http://127.0.0.1:8780", udp_port: 8781, tcp_port: 8782}
+proxy: {listen: 9781, control_port: 9790, drop: 0.0, delay_ms: 0, jitter_ms: 0, reorder: 0.0, dup: 0.0}
+devices:
+  - {id: ECU-0001, profile: highway, fw: 1.0.0, hw: SIM-MOTOR-A, hz: 10, drop_rate: 0.0, seed: 101}
+  - {id: ECU-0002, profile: city,    fw: 1.0.0, hw: SIM-MOTOR-A, hz: 10, drop_rate: 0.0, seed: 102}
+  - {id: ECU-0003, profile: city,    fw: 1.0.0, hw: SIM-MOTOR-B, hz: 10, drop_rate: 0.0, seed: 103}
+  - {id: ECU-0004, profile: highway, fw: 1.0.0, hw: SIM-MOTOR-B, hz: 10, drop_rate: 0.0, seed: 104}
+  - {id: ECU-0005, profile: city,    fw: 1.0.0, hw: SIM-MOTOR-A, hz: 10, drop_rate: 0.0, seed: 105, via_proxy: true}
+  - {id: ECU-0006, profile: idle,    fw: 1.0.0, hw: SIM-MOTOR-B, hz: 5,  drop_rate: 0.0, seed: 106}
+timeline:
+  - {at_s: 2, action: note, say: "Six ECUs are coming up on a fresh database. Open the dashboard."}
+expect:
+  - {at_s: 12, check: device_state, device: ECU-0001, params: {online: true, has_telemetry: true, state: [IDLE, RUNNING]}}
+  - {at_s: 12, check: device_state, device: ECU-0002, params: {online: true, has_telemetry: true}}
+  - {at_s: 12, check: device_state, device: ECU-0003, params: {online: true, has_telemetry: true}}
+  - {at_s: 12, check: device_state, device: ECU-0004, params: {online: true, has_telemetry: true}}
+  - {at_s: 12, check: device_state, device: ECU-0005, params: {online: true, has_telemetry: true}}
+  - {at_s: 12, check: device_state, device: ECU-0006, params: {online: true, has_telemetry: true}}
+  - {at_s: 20, check: loss_pct_gt, device: ECU-0005, params: {value: 1, invert: true}}
+  - {at_s: 20, check: no_alerts_of_severity, params: {severity: critical}}

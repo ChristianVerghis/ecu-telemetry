@@ -64,6 +64,15 @@ All children (backend, proxy, agents) are killed on exit — including on Ctrl-C
    are evaluated at `at_s` and re-polled every 0.5 s for up to `--grace` seconds.
 6. Print the table, write the report, kill all children.
 
+Two options exist for demos. `--ports BASE` moves http/udp/tcp to `BASE`, `BASE+1`, `BASE+2`
+regardless of the scenario's `backend` block; `--ports auto` keeps the scenario's ports when
+they are free and otherwise takes the first free triple from 8790. `--hold` keeps the backend
+and agents running after the timeline until Ctrl-C (agents get no `--duration`).
+`make demo` is `demo.yml` with `--start-backend --ports auto --hold`.
+
+`--start-backend` refuses to run when something already answers `/health` on the chosen
+port; before that check it would quietly use that backend and its old database.
+
 ## Scenario schema
 
 ```yaml
@@ -91,6 +100,8 @@ timeline:                             # things run_sil does TO the system
   - {at_s: 15, action: firmware_deploy,   device: ECU-0001, params: {version: "1.1.0"}}
   - {at_s: 55, action: cmd,               device: ECU-0001, params: {cmd: reboot|clear_faults|request_hello}}
   - {at_s: 40, action: proxy_set,                           params: {drop: 0.5, delay_ms: 100}}   # POST /set on the proxy
+  - {at_s: 5,  action: note, say: "Fleet is up."}                                                 # prints the line, does nothing else
+  # any timeline entry may carry `say: "..."`; it is printed just before the action runs
 expect:                               # things run_sil checks ABOUT the system
   - {at_s: 30, check: alert_open,             device: ECU-0001, params: {match: OVERTEMP}}      # match: substring or list, case-insensitive, over the whole alert JSON
   - {at_s: 85, check: alert_resolved,         device: ECU-0001, params: {match: [temp, OVERTEMP]}}

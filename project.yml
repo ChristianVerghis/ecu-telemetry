@@ -18,6 +18,7 @@ actions:
   test-firmware: ctest --test-dir firmware/build --output-on-failure
   test-backend: backend/.venv/bin/python -m pytest -q backend/tests
   test-integration: backend/.venv/bin/python -m pytest -q tests/integration
+  demo: make demo
   fleet-demo: backend/.venv/bin/python sim/fleet.py --n 6
   sil-thermal: backend/.venv/bin/python sim/run_sil.py sim/scenarios/thermal_runaway.yml
   sil-baseline: backend/.venv/bin/python sim/run_sil.py sim/scenarios/baseline_fleet.yml

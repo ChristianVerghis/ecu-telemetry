@@ -75,7 +75,15 @@ Two changes came out of running on hardware. Device-side thresholds gained hyste
 
 ## Run it
 
-Backend (creates `backend/.venv` on first run, serves on http://localhost:8780):
+The whole thing in one command: a fresh database, the backend, and six simulated ECUs. It prints the dashboard URL and stays up until Ctrl-C.
+
+```bash
+make demo
+```
+
+It uses ports 8780-8782 when they are free and says so when it has to move to 8790-8792.
+
+The pieces, one at a time. Backend (creates `backend/.venv` on first run, serves on http://localhost:8780):
 
 ```bash
 ./run.sh
@@ -115,7 +123,7 @@ backend/.venv/bin/python -m pytest -q backend/tests     # protocol / db / anomal
 backend/.venv/bin/python -m pytest -q tests/integration # real agent <-> real backend
 ```
 
-`make help` lists the equivalent Make targets (`build`, `test`, `sil`, `sil-all`, `fleet`, `up`, `clean`, `jetson-deploy`, `jetson-logs`).
+`make help` lists the equivalent Make targets (`build`, `test`, `demo`, `sil`, `sil-all`, `fleet`, `up`, `clean`, `jetson-deploy`, `jetson-logs`).
 
 Set `ANTHROPIC_API_KEY` to enable Claude-backed diagnostics; without it the heuristic diagnostician answers and results are tagged `model: "heuristic"`.
 
