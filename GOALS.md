@@ -69,7 +69,7 @@ The demo must run on the Mac alone; the Jetson is a bonus when it is reachable. 
 ### D3 · things to point at
 - [x] Dashboard screenshots + a short GIF of the storyline in the README (`tools/capture.mjs` drives headless Chrome over the DevTools protocol; the `--screenshot` flag fires before the charts have data)
 - [x] `docs/demo.md`: the walkthrough, what to say at each step, and the design questions an interviewer will ask (why UDP + TCP, loss from sequence gaps, CRC, SQLite WAL + rollups, EWMA vs thresholds, the hysteresis story, what SIL with real binaries buys, what is simulated, security)
-- [ ] Golden frames: one file of hex frames that both the C++ and the Python codec tests decode and re-encode. The README used to claim "shared byte vectors"; there were none (wording corrected 11-05)
+- [x] Golden frames: `firmware/tests/fixtures/frames.txt`, one hex frame per message type, decoded and re-encoded byte for byte by both the C++ (`golden_frames`) and the Python (`test_golden_frames`) tests. The README used to claim "shared byte vectors" when there were none
 - [ ] (owner) Diagnostics with a model: `backend/app/diagnostics.py` defaults to model id `claude-opus-5`; check it against the current model list before setting `ANTHROPIC_API_KEY` for a demo. Never run with a key so far
 - [x] Numbers to quote (`make bench`, `docs/measurements.md`): 10,000 frames/s with no loss on one core; fault to alert 91 ms median; transit 0.7 ms; measured loss within about a point of injected from 5 to 50 %
 

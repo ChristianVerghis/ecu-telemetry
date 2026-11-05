@@ -11,7 +11,7 @@
 The pipeline, end to end:
 
 - **Device / ECU** (`firmware/`): a dependency-free C++17 agent that behaves like a motor-controller ECU. It runs a deterministic plant model (motor, battery, thermal, vibration, GPS) with four drive-cycle profiles and eight injectable fault flags, streams `TELEMETRY` frames over UDP at a fixed rate, and holds a TCP control connection with exponential-backoff reconnect. With `--source jetson` the same binary runs on a Jetson Orin Nano and reports the board's measured temperature, input voltage and current, and fan speed instead of the plant model's.
-- **Wire protocol** (`docs/protocol.md`): one frame format for both transports. 36-byte little-endian header (magic, version, message type, device ID, sequence number, timestamp, firmware version, payload length) plus a CRC-32 trailer. Implemented once in C++ and once in Python; each is tested against the spec's layout byte by byte, and against the other by the integration and SIL runs.
+- **Wire protocol** (`docs/protocol.md`): one frame format for both transports. 36-byte little-endian header (magic, version, message type, device ID, sequence number, timestamp, firmware version, payload length) plus a CRC-32 trailer. Implemented once in C++ and once in Python. Both test suites read the same file of golden frames, one per message type, and each must decode every frame and re-encode it to the same bytes.
 - **Ingestion and storage** (`backend/app/ingest.py`, `db.py`): asyncio UDP datagram server and TCP stream server. Packet loss is estimated from sequence gaps; devices go offline after 15 s of silence. Samples land in SQLite (WAL mode) via batched inserts, with 1-minute rollups and 24 h raw retention.
 - **Alerts** (`backend/app/anomaly.py`): editable threshold rules, EWMA z-score anomaly detection, and rate-of-change rules, with per-device deduplication, auto-resolve after the condition clears, and per-device threshold overrides (a 5 V board and a 96 V pack do not share an undervoltage limit).
 - **Control plane**: versioned device configuration pushed over the TCP channel (`CONFIG_SET`), simulated firmware OTA (`FW_UPDATE` / `FW_ACK` / reboot / `HELLO`), remote fault injection, and `LOG` frames shipped to a per-device log store.
@@ -45,8 +45,8 @@ Working on EV and automotive systems means living at the seam between firmware o
 As of 2026-11-05:
 
 **Works**
-- Firmware agent builds with CMake and passes its 18 CTest tests (CRC, header layout, codec round-trips, fault parsing, config parsing, physics determinism and fault behaviour, the sysfs sensor reader against a fixture tree, plus CLI and offline-run smoke tests) on macOS and in CI on Linux; it also builds natively on the Jetson (arm64).
-- Backend passes 29 pytest tests (protocol, db, anomaly, API); integration tests run a real agent against a real backend.
+- Firmware agent builds with CMake and passes its 19 CTest tests (CRC, header layout, codec round-trips, golden frames, fault parsing, config parsing, physics determinism and fault behaviour, the sysfs sensor reader against a fixture tree, plus CLI and offline-run smoke tests) on macOS and in CI on Linux; it also builds natively on the Jetson (arm64).
+- Backend passes 30 pytest tests (protocol, db, anomaly, API); integration tests run a real agent against a real backend.
 - All seven SIL scenarios validate; `baseline_fleet`, `thermal_runaway` and `demo` (the `make demo` walkthrough, 21 checks) run in CI on every push.
 - Fleet launcher, lossy proxy, dashboard, alerts, config push, simulated OTA, and log shipping all exercised end to end locally.
 - Dashboard charts cover 5 m (raw), 1 h (10 s buckets), 24 h and 7 d (1-minute rollups, which are kept after raw samples are pruned at 24 h).

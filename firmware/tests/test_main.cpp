@@ -4,7 +4,9 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <fstream>
 #include <functional>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -430,6 +432,61 @@ void test_sysfs_sensors() {
   CHECK(!none.read().ok);
 }
 
+// Decode a payload into its struct and encode it again.
+template <typename T>
+bool reencode(const std::vector<uint8_t>& p, std::vector<uint8_t>& out) {
+  T v;
+  if (!T::decode(p, v)) return false;
+  out = v.encode();
+  return true;
+}
+
+// The Python test suite reads the same file (test_golden_frames): both codecs must agree on every byte.
+void test_golden_frames() {
+  std::ifstream in(std::string(ECU_FIXTURES_DIR) + "/frames.txt");
+  CHECK(in.good());
+  int n = 0;
+  std::string line;
+  while (std::getline(in, line)) {
+    if (line.empty() || line[0] == '#') continue;
+    std::istringstream ss(line);
+    std::string name, hex;
+    ss >> name >> hex;
+    std::vector<uint8_t> raw;
+    for (size_t i = 0; i + 1 < hex.size(); i += 2) raw.push_back(static_cast<uint8_t>(std::stoul(hex.substr(i, 2), nullptr, 16)));
+    Frame f;
+    size_t used = 0;
+    CHECK_EQ(decodeFrame(raw.data(), raw.size(), f, used), DecodeError::OK);
+    CHECK_EQ(used, raw.size());
+    CHECK_EQ(f.hdr.device_id, "ECU-GOLD");
+    CHECK_EQ(f.hdr.seq, 0x01020304u);
+    CHECK_EQ(f.hdr.ts_ms, 1700000000123ull);
+    CHECK_EQ(f.hdr.fw_version, 0x010203u);
+    std::vector<uint8_t> p;
+    bool ok = false;
+    switch (f.hdr.msg_type) {
+      case MsgType::TELEMETRY: ok = reencode<Telemetry>(f.payload, p); break;
+      case MsgType::HELLO: ok = reencode<Hello>(f.payload, p); break;
+      case MsgType::HEARTBEAT: ok = reencode<Heartbeat>(f.payload, p); break;
+      case MsgType::LOG: ok = reencode<LogMsg>(f.payload, p); break;
+      case MsgType::CONFIG_SET: ok = reencode<ConfigSet>(f.payload, p); break;
+      case MsgType::CONFIG_ACK: ok = reencode<ConfigAck>(f.payload, p); break;
+      case MsgType::FW_UPDATE: ok = reencode<FwUpdate>(f.payload, p); break;
+      case MsgType::FW_ACK: ok = reencode<FwAck>(f.payload, p); break;
+      case MsgType::FAULT_INJECT: ok = reencode<FaultInject>(f.payload, p); break;
+      case MsgType::FAULT_ACK: ok = reencode<FaultAck>(f.payload, p); break;
+      case MsgType::CMD: ok = reencode<Cmd>(f.payload, p); break;
+    }
+    if (!ok) std::printf("  golden frame %s: payload did not decode\n", name.c_str());
+    CHECK(ok);
+    FrameHeader h = f.hdr;
+    if (encodeFrame(h, p) != raw) std::printf("  golden frame %s: re-encoded bytes differ\n", name.c_str());
+    CHECK(encodeFrame(h, p) == raw);
+    ++n;
+  }
+  CHECK_EQ(n, 11);  // one frame per message type
+}
+
 struct TestCase {
   const char* name;
   std::function<void()> fn;
@@ -446,6 +503,7 @@ const TestCase kTests[] = {
     {"overtemp_injection", test_overtemp_injection},
     {"other_injections", test_other_injections},
     {"sysfs_sensors", test_sysfs_sensors},
+    {"golden_frames", test_golden_frames},
 };
 }  // namespace
 

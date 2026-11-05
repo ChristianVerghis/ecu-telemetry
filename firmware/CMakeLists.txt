@@ -40,6 +40,7 @@ set(ECU_TESTS
   overtemp_injection
   other_injections
   sysfs_sensors
+  golden_frames
 )
 foreach(t IN LISTS ECU_TESTS)
   add_test(NAME ${t} COMMAND ecu_tests ${t})

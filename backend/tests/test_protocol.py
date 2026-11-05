@@ -1,3 +1,4 @@
+from pathlib import Path
 import struct
 import zlib
 
@@ -108,3 +109,22 @@ def test_stream_decoder_reassembles_and_resyncs():
         out += list(dec.feed(stream[i:i + 7]))
     assert [f.msg_type for f in out] == [P.MsgType.HELLO, P.MsgType.HEARTBEAT, P.MsgType.LOG]
     assert out[1].payload.reconnects == 4
+
+
+GOLDEN = Path(__file__).resolve().parents[2] / "firmware" / "tests" / "fixtures" / "frames.txt"
+
+
+def test_golden_frames():
+    """The C++ test suite reads the same file (golden_frames): both codecs must agree on every byte."""
+    rows = [ln.split() for ln in GOLDEN.read_text().splitlines() if ln and not ln.startswith("#")]
+    assert len(rows) == len(P.MsgType)                      # one frame per message type
+    seen = set()
+    for name, hexframe in rows:
+        raw = bytes.fromhex(hexframe)
+        f = P.decode(raw)
+        assert (f.device_id, f.header.seq, f.header.ts_ms) == ("ECU-GOLD", 0x01020304, 1700000000123), name
+        assert P.fw_decode(f.header.fw_version) == "1.2.3", name
+        assert isinstance(f.payload, P.Payload), name       # decoded into its typed payload
+        assert P.encode_frame(f.device_id, f.header.seq, f.header.ts_ms, f.header.fw_version, f.payload) == raw, name
+        seen.add(f.msg_type)
+    assert seen == set(P.MsgType)
