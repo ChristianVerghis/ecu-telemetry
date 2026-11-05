@@ -29,6 +29,34 @@ def test_telemetry_buffer_flush_query_rollup(db):
     assert db.prune() == 100
 
 
+def test_telemetry_7d_rollup_view(db):
+    now = time.time()
+    base = {"rpm": 1000.0, "temp_c": 50.0, "current_a": 10.0, "voltage_v": 96.0, "vibration_g": 0.1,
+            "speed_kph": 20.0, "lat": 1.0, "lon": 2.0, "fault_flags": 0, "state": 1}
+    # one rollup bucket per day for the last 6 days, directly in telemetry_rollup_1m (as if long since rolled)
+    for day in range(6, 0, -1):
+        bucket = (int(now) // 60) * 60 - day * 86400
+        db.conn.execute(
+            "INSERT OR REPLACE INTO telemetry_rollup_1m "
+            "(device_id, bucket, n, rpm_avg, rpm_min, rpm_max, temp_c_avg, temp_c_min, temp_c_max, "
+            "current_a_avg, current_a_min, current_a_max, voltage_v_avg, voltage_v_min, voltage_v_max, "
+            "vibration_g_avg, vibration_g_min, vibration_g_max, speed_kph_avg, speed_kph_min, speed_kph_max, "
+            "fault_flags_any, state_max, lat, lon) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            ("ECU-0001", bucket, 60, base["rpm"], base["rpm"], base["rpm"],
+             base["temp_c"] + day, base["temp_c"], base["temp_c"] + day * 2,
+             base["current_a"], base["current_a"], base["current_a"],
+             base["voltage_v"], base["voltage_v"], base["voltage_v"],
+             base["vibration_g"], base["vibration_g"], base["vibration_g"],
+             base["speed_kph"], base["speed_kph"], base["speed_kph"],
+             0, 1, base["lat"], base["lon"]),
+        )
+    since = now - 7 * 86400
+    rows = db.telemetry("ECU-0001", since=since, until=now, step="1m", limit=12000)
+    assert len(rows) == 6
+    assert [r["ts"] for r in rows] == sorted(r["ts"] for r in rows)  # chronological
+    assert rows[0]["temp_c"] == 56.0  # 6 days ago bucket (day=6 -> temp_c_avg = base+day)
+
+
 def test_devices_config_alerts_firmware(db):
     db.upsert_device("ECU-0001", hw_model="SIM", fw_version="1.0.0")
     db.upsert_device("ECU-0001", state=2)

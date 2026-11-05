@@ -58,7 +58,7 @@ The demo must run on the Mac alone; the Jetson is a bonus when it is reachable. 
 ### D1 · the repo looks alive
 - [x] CI green on `main`: bring over the SIL log-filename fix from `nightly/2026-09-21` (440e887); `main` has been red since 09-15 only because of the artifact upload step
 - [x] README status is from 09-15 and still says "no real hardware target": update Status, add the Jetson section with the real thermal event from `docs/hardware.md`
-- [ ] Decide the nightly branches: merge or drop the 7-day chart (`nightly/2026-09-25`) and MQTT (`nightly/2026-10-01`); delete the four local-only duplicates
+- [x] Decide the nightly branches: 7-day chart merged (`nightly/2026-09-25` + the rollup test from `nightly/2026-09-09`); MQTT (`nightly/2026-10-01`) stays on its branch, it needs a broker and is not on the demo path; four local-only duplicates deleted
 
 ### D2 · one command, one story
 - [ ] `make demo`: fresh demo database (not `backend/data/telemetry.db`, which carries stale devices and 8 open `offline` alerts), backend + 6-device fleet, prints the dashboard URL
@@ -82,5 +82,5 @@ The demo must run on the Mac alone; the Jetson is a bonus when it is reachable. 
 - [ ] Publish to GitHub and watch CI go green
 - [ ] Real hardware target: port agent to an ESP32/STM32 (lwIP sockets) reading a real motor
 - [ ] MQTT transport option alongside raw UDP
-- [ ] Downsampled long-range charts (rollup-backed 7d view)
+- [x] Downsampled long-range charts (rollup-backed 7d view)
 - [ ] Alert notifications (email/Slack webhook)

@@ -45,12 +45,12 @@ As of 2026-11-05:
 - Backend passes 25 pytest tests (protocol, db, anomaly, API); integration tests run a real agent against a real backend.
 - All six SIL scenarios validate; `baseline_fleet` and `thermal_runaway` run in CI on every push.
 - Fleet launcher, lossy proxy, dashboard, alerts, config push, simulated OTA, and log shipping all exercised end to end locally.
+- Dashboard charts cover 5 m (raw), 1 h (10 s buckets), 24 h and 7 d (1-minute rollups, which are kept after raw samples are pruned at 24 h).
 - A real device: the agent runs on a Jetson Orin Nano Super with `--source jetson`, and a real thermal event has gone through the whole chain (see below).
 - GitHub Actions CI (firmware, backend, integration, SIL matrix, compose build) and a tagged release workflow (Linux amd64/arm64 binaries, GHCR images).
 
 **Rough edges**
 - Docker images build in CI (`docker compose build`) but have not been run locally or on the Jetson.
-- Dashboard charts cover 5 m (raw), 1 h (10 s buckets), and 24 h (1-minute rollups). A longer 7-day view is not implemented.
 - On the Jetson, vibration, speed, and position have no sensor behind them and report 0; fan rpm is estimated from PWM duty because the fan has no tachometer.
 - No MQTT transport, no alert notifications (webhook/email), and no microcontroller port. The agent is written to port to an ESP32/STM32 with lwIP sockets, but that has not been done.
 
