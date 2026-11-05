@@ -57,24 +57,83 @@ def test_fault_flags_offline_comm_and_rate(db):
     assert db.open_alert("D2", "offline") is None
 
 
+def _warm(eng, dev, hz=10, seconds=10.0, seed=1, **fixed):
+    """Feed a steady, slightly noisy signal; returns the time after the last sample."""
+    rnd, t, dt = random.Random(seed), 0.0, 1.0 / hz
+    for _ in range(int(seconds * hz)):
+        eng.on_telemetry(dev, dict(BASE, temp_c=60.0 + rnd.gauss(0, 0.3), current_a=50.0 + rnd.gauss(0, 0.5),
+                                   vibration_g=0.5 + abs(rnd.gauss(0, 0.02)), **fixed), t)
+        t += dt
+    return t
+
+
+def _feed(eng, dev, t, seconds, hz=10, **sample):
+    fired, dt = [], 1.0 / hz
+    for _ in range(int(round(seconds * hz))):
+        fired = eng.on_telemetry(dev, dict(BASE, **sample), t)
+        t += dt
+    return fired, t
+
+
 def test_ewma_zscore_fires_on_step_change(db):
     eng = AnomalyEngine(db)
     eng.set_rules({"thresholds": [], "rate": {}})  # isolate the statistical rule
-    rnd = random.Random(1)
-    t = 0.0
-    for _ in range(100):
-        eng.on_telemetry("D3", dict(BASE, temp_c=60.0 + rnd.gauss(0, 0.3)), t)
-        t += 0.1
+    t = _warm(eng, "D3")
     assert db.alerts("D3", "open") == []
-    fired = []
-    for _ in range(3):
-        fired = eng.on_telemetry("D3", dict(BASE, temp_c=75.0), t)
-        t += 0.1
+    fired, t = _feed(eng, "D3", t, 2.5, temp_c=75.0)
+    assert "anomaly:temp_c" not in fired           # not yet: sustain_s is 3 s
+    fired, t = _feed(eng, "D3", t, 1.0, temp_c=75.0)
     assert "anomaly:temp_c" in fired
     a = db.open_alert("D3", "anomaly:temp_c")
     assert a and a["metric"] == "temp_c"
     # other metrics stayed stable -> no anomaly alerts for them
     assert {x["rule"] for x in db.alerts("D3", "open")} == {"anomaly:temp_c"}
+
+
+def test_ewma_ignores_a_bump_shorter_than_sustain_s(db):
+    eng = AnomalyEngine(db)
+    eng.set_rules({"thresholds": [], "rate": {}})
+    t = _warm(eng, "D5")
+    fired, t = _feed(eng, "D5", t, 1.5, vibration_g=1.8)   # a pothole: large, over in 1.5 s
+    assert "anomaly:vibration_g" not in fired
+    fired, t = _feed(eng, "D5", t, 5.0, vibration_g=0.5)
+    assert db.alerts("D5", "all") == []
+    fired, t = _feed(eng, "D5", t, 3.5, vibration_g=1.8)   # the same level held: a real change
+    assert "anomaly:vibration_g" in fired
+
+
+def test_ewma_decision_does_not_depend_on_telemetry_rate(db):
+    # 2 s of deviation is 20 samples at 10 Hz and 10 at 5 Hz; neither is 3 s
+    for dev, hz in (("D6", 10), ("D7", 5)):
+        eng = AnomalyEngine(db)
+        eng.set_rules({"thresholds": [], "rate": {}})
+        t = _warm(eng, dev, hz=hz)
+        fired, t = _feed(eng, dev, t, 2.0, hz=hz, temp_c=75.0)
+        assert "anomaly:temp_c" not in fired, hz
+        fired, t = _feed(eng, dev, t, 1.5, hz=hz, temp_c=75.0)
+        assert "anomaly:temp_c" in fired, hz
+
+
+def test_ewma_gate_separates_a_load_change_from_a_fault(db):
+    eng = AnomalyEngine(db)
+    eng.set_rules({"thresholds": [], "rate": {}})
+    # the driver accelerates: rpm climbs and current follows it. Not an anomaly.
+    t = _warm(eng, "D8")
+    for i in range(60):
+        fired = eng.on_telemetry("D8", dict(BASE, rpm=3000.0 + 40.0 * i, current_a=50.0 + 1.0 * i), t)
+        assert "anomaly:current_a" not in fired
+        t += 0.1
+    assert db.alerts("D8", "all") == []
+    # the same current at an unchanged rpm is one
+    t = _warm(eng, "D9")
+    fired, t = _feed(eng, "D9", t, 3.5, current_a=110.0)
+    assert "anomaly:current_a" in fired
+    # temperature is not gated: it is judged even while rpm moves
+    t = _warm(eng, "D10")
+    for i in range(40):
+        fired = eng.on_telemetry("D10", dict(BASE, rpm=3000.0 + 40.0 * i, temp_c=75.0), t)
+        t += 0.1
+    assert "anomaly:temp_c" in fired
 
 
 def test_rules_roundtrip_and_config_thresholds(db):

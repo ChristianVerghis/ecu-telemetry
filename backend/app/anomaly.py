@@ -32,8 +32,14 @@ DEFAULT_RULES: dict = {
                                                   "SENSOR_STUCK": "warn", "GPS_LOST": "info",
                                                   "COMM_DEGRADED": "warn", "ENCODER_FAULT": "critical"}},
     "rate": {"temp_c": {"max_per_s": 2.0, "window_s": 5.0, "severity": "warn"}},
-    "anomaly": {"enabled": True, "z": 4.0, "sustain": 3, "alpha": 0.05, "warmup": 20, "min_std": 0.05,
+    # sustain_s is in seconds, not samples, so a 5 Hz and a 10 Hz device get the same decision, and it is
+    # longer than a road bump (the plant's vibration spikes decay in under 2 s).
+    # gate: current, voltage and vibration follow what the driver asks for. While the gate metric is away
+    # from its own recent mean the device is changing operating point, not misbehaving.
+    "anomaly": {"enabled": True, "z": 4.0, "sustain": 3, "sustain_s": 3.0, "alpha": 0.05, "warmup": 20, "min_std": 0.05,
                 "metrics": ["temp_c", "current_a", "voltage_v", "vibration_g"],  # rpm/speed are driver-controlled
+                "gate": {"metric": "rpm", "frac": 0.10, "abs": 100.0,
+                         "applies_to": ["current_a", "voltage_v", "vibration_g"]},
                 "severity": "warn"},
 }
 
@@ -46,9 +52,11 @@ class Ewma:
     var: float = 0.0
     n: int = 0
     streak: int = 0
+    since: float | None = None  # when the current run of anomalous samples began
 
-    def update(self, x: float, alpha: float) -> float:
-        """Return z-score of x against the state *before* update, then update."""
+    def update(self, x: float, alpha: float, learn_var: bool = True) -> float:
+        """Return z-score of x against the state *before* update, then update.
+        learn_var=False moves the mean only, leaving the variance as it was."""
         if self.n == 0:
             self.mean, self.var, self.n = x, 0.0, 1
             return 0.0
@@ -56,7 +64,8 @@ class Ewma:
         z = abs(x - self.mean) / std if std > 0 else 0.0
         d = x - self.mean
         self.mean += alpha * d
-        self.var = (1 - alpha) * (self.var + alpha * d * d)
+        if learn_var:
+            self.var = (1 - alpha) * (self.var + alpha * d * d)
         self.n += 1
         return z
 
@@ -277,8 +286,20 @@ class AnomalyEngine:
             alpha = float(an.get("alpha", 0.05))
             zlim = float(an.get("z", 4.0))
             sustain = int(an.get("sustain", 3))
+            sustain_s = float(an.get("sustain_s", 0.0))
             warmup = int(an.get("warmup", 20))
             min_std = float(an.get("min_std", 0.05))
+            # operating-point gate: is the gate metric (rpm) away from its own recent mean?
+            gate = an.get("gate") or {}
+            gated = set(gate.get("applies_to") or [])
+            moving = False
+            gm = gate.get("metric")
+            if gm and gm in t:
+                g = st.ewma.setdefault(f"gate:{gm}", Ewma())
+                gx = float(t[gm])
+                if g.n >= warmup:
+                    moving = abs(gx - g.mean) > max(float(gate.get("frac", 0.1)) * abs(g.mean), float(gate.get("abs", 0.0)))
+                g.update(gx, alpha)
             for metric in an.get("metrics", []):
                 if metric not in t:
                     continue
@@ -287,16 +308,21 @@ class AnomalyEngine:
                 warm = e.n >= warmup
                 std = max(math.sqrt(e.var), min_std) if warm else math.sqrt(e.var)
                 z = abs(x - e.mean) / std if (warm and std > 0) else 0.0
-                # damp the baseline update on anomalous samples so outliers don't inflate the variance
-                # and mask themselves; the baseline still re-learns a persistent level shift slowly
-                e.update(x, alpha * 0.1 if (warm and z > zlim) else alpha)
-                if warm and z > zlim:
+                # a gated metric is not judged while the operating point moves; its baseline follows at full speed
+                hot = warm and z > zlim and not (moving and metric in gated)
+                # an anomalous sample moves the mean at a tenth of the speed and leaves the variance alone.
+                # Feeding its d*d into the variance let a sustained deviation mask itself within about a
+                # second; the slow mean is what re-learns a level shift that turns out to be permanent.
+                e.update(x, alpha * 0.1 if hot else alpha, learn_var=not hot)
+                if hot:
                     e.streak += 1
+                    if e.since is None:
+                        e.since = now
                 else:
-                    e.streak = 0
-                cond = e.streak >= sustain
+                    e.streak, e.since = 0, None
+                cond = e.streak >= sustain and now - (e.since or now) >= sustain_s
                 self._mark(device_id, f"anomaly:{metric}", cond, now, metric, x, an.get("severity", "warn"),
-                           f"{metric}={x:.2f} deviates z={z:.1f} from EWMA {e.mean:.2f} for {e.streak} samples")
+                           f"{metric}={x:.2f} deviates z={z:.1f} from EWMA {e.mean:.2f} for {now - (e.since or now):.1f}s")
                 if cond:
                     fired.append(f"anomaly:{metric}")
 

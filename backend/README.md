@@ -71,7 +71,7 @@ Evaluated on every telemetry sample, with the device's current config providing 
 * **Fault flags** – any set bit opens an alert named `flag:<NAME>` with a per-flag severity.
 * **Comm** – rolling `loss_pct > 10` → `packet_loss` (warn). **Offline** → `offline` (critical), resolved immediately when the device is seen again.
 * **Rate of change** – `temp_c` rising faster than 2 °C/s → `rate:temp_c`.
-* **Statistical** – per device × metric EWMA mean/variance (α=0.05, 20-sample warm-up, variance floor). |z| > 4 for 3 consecutive samples → `anomaly:<metric>`. Anomalous samples update the baseline at α/10 so an outlier can't hide itself, while a persistent level shift is eventually re-learned.
+* **Statistical** – per device × metric EWMA mean/variance (α=0.05, 20-sample warm-up, variance floor). |z| > 4 held for `sustain_s` (3 s) → `anomaly:<metric>`. The hold is in seconds so the decision does not depend on the telemetry rate, and it is longer than a road bump. Anomalous samples move the mean at α/10 and leave the variance untouched, so a sustained deviation can't inflate the variance and hide itself, while a persistent level shift is re-learned through the slow mean (about 50 s for a 50σ step at 10 Hz). `current_a`, `voltage_v` and `vibration_g` follow what the driver asks for, so they are gated on the operating point: while `rpm` is more than 10 % (or 100 rpm) from its own EWMA they are not judged and their baselines follow at full speed. `temp_c` is never gated.
 
 Dedupe: exactly one open (or acked) alert per (device, rule). Auto-resolve when the condition has been clear for `resolve_after_s` (10 s; checked every 5 s). All of this lives in one JSON document editable via `PUT /api/rules` (partial documents are merged over the defaults).
 
