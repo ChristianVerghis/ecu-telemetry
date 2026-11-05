@@ -26,11 +26,11 @@ A portfolio-grade miniature connected-vehicle platform that exercises the whole 
 Board: Jetson Orin Nano Super (`ssh jetson`, Tailscale). Backend stays on the Mac (:8780, ingest UDP :8781 / TCP :8782 reachable over Tailscale at 100.95.205.56).
 
 ### Day 1 · Tue 10-27 · the Jetson is a device
-- [ ] Build `ecu_agent` natively on the Jetson (arm64, gcc 13) and pass CTest there
-- [ ] Run it as `ECU-JETSON-01` against the Mac backend over Tailscale; device shows live in the dashboard
-- [ ] Keep it running: user systemd service on the Jetson (restart on failure, starts at boot)
-- [ ] `make jetson-deploy` (rsync + build + restart) so a code change reaches the board in one command
-- [ ] Note arm64 build + deploy in `docs/hardware.md`
+- [x] Build `ecu_agent` natively on the Jetson (arm64, gcc 13) and pass CTest there (19/19 on 11-05)
+- [x] Run it as `ECU-JETSON-1` against the Mac backend over Tailscale; device shows live in the dashboard
+- [ ] (owner) Keep it running: user systemd service on the Jetson (restart on failure, starts at boot): `bash ~/ecu-telemetry/deploy/jetson/install.sh` on the board
+- [x] `make jetson-deploy` (rsync + build + restart) so a code change reaches the board in one command
+- [x] Note arm64 build + deploy in `docs/hardware.md`
 
 ### Day 2 · Wed 10-28 · real signals
 - [x] `--source jetson`: temperature from `/sys/class/thermal`, VDD_IN voltage/current from the INA3221 power monitor, fan duty as rpm, so temp/voltage/current/rpm are measured, not simulated
@@ -43,13 +43,13 @@ Board: Jetson Orin Nano Super (`ssh jetson`, Tailscale). Backend stays on the Ma
 - [ ] (owner) Order a 3.3 V CAN transceiver board (SN65HVD230) for the 40-pin header so `can0` goes physical next week
 
 ### Day 4 · Fri 10-30 · fleet, OTA and loss on a real network
-- [ ] OTA push + reboot to the Jetson agent from the dashboard (service restart = reboot), HELLO comes back with the new version
-- [ ] SIL scenario that includes the Jetson device alongside simulated ones; passes
+- [x] OTA push to the Jetson agent, HELLO comes back with the new version (`jetson.yml`; in-process reboot, not a service restart)
+- [x] SIL scenario that includes the Jetson device alongside simulated ones; passes (`sim/scenarios/jetson.yml`, 11/11)
 - [ ] Packet-loss and reconnect numbers over Wi-Fi vs Tailscale relay; write them down
 
 ### Day 5 · Sat/Sun 10-31/11-01 · ship it
 - [ ] Verify the release workflow's arm64 image runs on the Jetson via `docker --runtime nvidia` (and plain runc)
-- [ ] README "Real hardware target" section with a dashboard screenshot of the live board; build_log; portfolio blurb
+- [x] README "Real hardware target" section with a dashboard screenshot of the live board; build_log (portfolio blurb not done)
 - [ ] Tag a release; CI green
 
 ## Demo-ready — something to show and explain in an interview (started 2026-11-05)
@@ -77,7 +77,7 @@ The demo must run on the Mac alone; the Jetson is a bonus when it is reachable. 
 - [x] (owner) Re-authenticate Tailscale SSH (done 11-05). `deploy/jetson/install.sh` is still not run: the demo no longer needs the service, it starts the agent over ssh; install it only to have the board stream permanently
 - [x] `ECU-JETSON-1` live in a demo fleet next to simulated devices: `make demo-jetson` (`sim/scenarios/jetson.yml`, agent started over ssh); the real-board step is a config push to a 40 °C limit, which trips the board's own protection on its measured 49.7 °C
 - [x] OTA push to the board, HELLO comes back as 1.2.0 (in `jetson.yml`; in-process reboot of the agent, not a service restart, since the service is not installed)
-- [ ] `vcan0` + `sim/can_motor.py` + `--source can` (Jetson week Day 3), if CAN is worth showing for the role
+- [ ] `vcan0` + `sim/can_motor.py` + `--source can` (Jetson week Day 3). Not started: low value for a software role, and `vcan0` needs sudo on the board, which is the owner's to run
 
 ## Next
 - [x] Real hardware target (in progress above, Jetson first; ESP32/STM32 port stays listed below)
