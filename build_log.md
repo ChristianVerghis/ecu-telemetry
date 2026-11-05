@@ -10,3 +10,6 @@
 - `docker-compose.yml` (backend + 4 ECUs, `chaos` profile), GitHub Actions CI (firmware/backend/integration/SIL/docker) + tagged release workflow, Makefile.
 - Integration fixes: aligned undervoltage rule to the firmware's 96 V pack (was 48 V), `pythonpath` in pytest.ini so tests run from repo root, thermal_runaway scenario timing relaxed (60 s thermal time constant means recovery takes ~40 s).
 - Not verified locally: Docker builds (daemon not running). GitHub remote not yet created.
+
+**Update 2026-11-05**: demo-ready pass started (plan in `GOALS.md` → "Demo-ready").
+- D1 CI: `sim/run_sil.py` named per-process logs after the child name (`agent:ECU-0001`) and `actions/upload-artifact@v4` rejects colons, so both `sil` jobs failed at the upload step on every push to `main` since 09-15 while the scenarios themselves passed. Log filenames now use `-`. The fix sat on `nightly/2026-09-21` and was never merged.

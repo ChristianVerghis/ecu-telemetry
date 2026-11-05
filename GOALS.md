@@ -52,6 +52,31 @@ Board: Jetson Orin Nano Super (`ssh jetson`, Tailscale). Backend stays on the Ma
 - [ ] README "Real hardware target" section with a dashboard screenshot of the live board; build_log; portfolio blurb
 - [ ] Tag a release; CI green
 
+## Demo-ready — something to show and explain in an interview (started 2026-11-05)
+The demo must run on the Mac alone; the Jetson is a bonus when it is reachable. Work top to bottom, one item per turn, `make test` before each commit.
+
+### D1 · the repo looks alive
+- [x] CI green on `main`: bring over the SIL log-filename fix from `nightly/2026-09-21` (440e887); `main` has been red since 09-15 only because of the artifact upload step
+- [ ] README status is from 09-15 and still says "no real hardware target": update Status, add the Jetson section with the real thermal event from `docs/hardware.md`
+- [ ] Decide the nightly branches: merge or drop the 7-day chart (`nightly/2026-09-25`) and MQTT (`nightly/2026-10-01`); delete the four local-only duplicates
+
+### D2 · one command, one story
+- [ ] `make demo`: fresh demo database (not `backend/data/telemetry.db`, which carries stale devices and 8 open `offline` alerts), backend + 6-device fleet, prints the dashboard URL
+- [ ] Scripted storyline, about 3 minutes, driven through the REST API like a SIL scenario: healthy fleet → thermal fault → alert opens → diagnostics → config push lowers the limit → OTA rollout → lossy link (loss % climbs) → recovery, alerts auto-resolve
+- [ ] Fix what the story would trip over: duplicate `offline` alerts that stay open after reconnects; check the device page charts fill in on first load
+- [ ] `make demo` passes as a test (the storyline asserts its own expectations) and runs in CI
+
+### D3 · things to point at
+- [ ] Dashboard screenshots + a short GIF of the storyline in the README (headless Chrome works: `--headless=new --timeout=7000 --screenshot`, no `--virtual-time-budget`, SSE hangs it)
+- [ ] `docs/demo.md`: the walkthrough, what to say at each step, and the design questions an interviewer will ask (why UDP + TCP, loss from sequence gaps, CRC, SQLite WAL + rollups, EWMA vs thresholds, the hysteresis story, what SIL with real binaries buys)
+- [ ] Numbers to quote: frames/s per device and fleet, ingest latency, loss measured vs injected through the lossy proxy
+
+### D4 · the real device (needs the Jetson reachable)
+- [ ] (owner) Re-authenticate Tailscale SSH and run `deploy/jetson/install.sh` on the board once
+- [ ] `ECU-JETSON-1` live in the demo fleet next to the simulated devices; storyline has an optional real-board step (load the cores, real OVERTEMP)
+- [ ] OTA push to the real service from the dashboard, HELLO comes back with the new version (Jetson week Day 4)
+- [ ] `vcan0` + `sim/can_motor.py` + `--source can` (Jetson week Day 3), if CAN is worth showing for the role
+
 ## Next
 - [x] Real hardware target (in progress above, Jetson first; ESP32/STM32 port stays listed below)
 - [ ] Publish to GitHub and watch CI go green
