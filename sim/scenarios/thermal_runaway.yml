@@ -12,7 +12,8 @@ devices:
   - {id: ECU-0002, profile: city,    fw: 1.0.0, hw: SIM-MOTOR-A, hz: 10, drop_rate: 0.0, seed: 12}
 timeline: []
 expect:
-  - {at_s: 15, check: device_state, device: ECU-0001, params: {online: true, state: [IDLE, RUNNING]}}
+  # healthy before the fault: checked at 10 s, not 15 s, where it raced the fault's own start
+  - {at_s: 10, check: device_state, device: ECU-0001, params: {online: true, state: [IDLE, RUNNING]}}
   - {at_s: 30, check: alert_open,   device: ECU-0001, params: {match: OVERTEMP}}
   - {at_s: 35, check: alert_open,   device: ECU-0001, params: {match: temp}}
   - {at_s: 35, check: device_state, device: ECU-0001, params: {state: [DEGRADED, FAULT], fault_flags_any: [OVERTEMP]}}
