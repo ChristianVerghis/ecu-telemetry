@@ -68,7 +68,7 @@ Two options exist for demos. `--ports BASE` moves http/udp/tcp to `BASE`, `BASE+
 regardless of the scenario's `backend` block; `--ports auto` keeps the scenario's ports when
 they are free and otherwise takes the first free triple from 8790. `--hold` keeps the backend
 and agents running after the timeline until Ctrl-C (agents get no `--duration`).
-`make demo` is `demo.yml` with `--start-backend --ports auto --hold`.
+`make demo` is `demo.yml` with `--start-backend --ports auto --hold`; `make demo-check` is the same run without `--hold`, as a test.
 
 `--start-backend` refuses to run when something already answers `/health` on the chosen
 port; before that check it would quietly use that backend and its old database.

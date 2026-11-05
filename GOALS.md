@@ -62,8 +62,8 @@ The demo must run on the Mac alone; the Jetson is a bonus when it is reachable. 
 
 ### D2 · one command, one story
 - [x] `make demo`: fresh demo database (not `backend/data/telemetry.db`, which carries stale devices and 8 open `offline` alerts), backend + 6-device fleet, prints the dashboard URL
-- [ ] Scripted storyline, about 3 minutes, driven through the REST API like a SIL scenario: healthy fleet → thermal fault → alert opens → diagnostics → config push lowers the limit → OTA rollout → lossy link (loss % climbs) → recovery, alerts auto-resolve
-- [ ] Fix what the story would trip over: duplicate `offline` alerts that stay open after reconnects; check the device page charts fill in on first load
+- [x] Scripted storyline, about 3 minutes, driven through the REST API like a SIL scenario: healthy fleet → thermal fault → alert opens → diagnostics → config push lowers the limit → OTA rollout → lossy link (loss % climbs) → recovery, alerts auto-resolve
+- [ ] Fix what the story would trip over: duplicate `offline` alerts that stay open after reconnects; check the device page charts fill in on first load; the EWMA anomaly rule is noisy on healthy devices (22 of the 32 alerts in one demo run: `vibration_g` at random, `current_a`/`voltage_v` on every city device at the same drive-cycle step)
 - [ ] `make demo` passes as a test (the storyline asserts its own expectations) and runs in CI
 
 ### D3 · things to point at

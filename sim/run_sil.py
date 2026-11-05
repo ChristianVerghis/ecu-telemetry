@@ -301,8 +301,9 @@ class Api:
         r.raise_for_status()
         return self._json(r)
 
-    def post(self, path: str, body: dict | None = None):
-        r = self.c.post(path, json=body if body is not None else {})
+    def post(self, path: str, body: dict | None = None, timeout: float | None = None):
+        kw = {"timeout": timeout} if timeout else {}
+        r = self.c.post(path, json=body if body is not None else {}, **kw)
         r.raise_for_status()
         return self._json(r)
 
@@ -517,7 +518,8 @@ def eval_check(api: Api, e: dict) -> tuple[bool, str]:
 
     if check == "diagnosis_nonempty":
         try:
-            d = api.post(f"/api/devices/{did}/diagnose")
+            # with ANTHROPIC_API_KEY set this is a model call, not the instant heuristic
+            d = api.post(f"/api/devices/{did}/diagnose", timeout=45.0)
         except Exception as ex:
             return False, f"diagnose failed: {ex}"
         causes = (d or {}).get("probable_causes") or []

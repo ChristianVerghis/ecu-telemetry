@@ -1,9 +1,11 @@
 name: demo
 description: >
-  The walkthrough fleet behind `make demo`: six simulated ECUs on a fresh
-  database, one of them routed through the lossy proxy. Brings the fleet up
-  and checks it is healthy.
-duration_s: 25
+  The walkthrough behind `make demo`, about three minutes: six simulated ECUs
+  on a fresh database, then a thermal fault and its alerts, a diagnosis, a
+  config push that trips a device's own protection, a staggered OTA rollout,
+  and a degraded link measured from sequence gaps. Everything recovers and the
+  alerts close on their own. Each step asserts what it claims.
+duration_s: 180
 backend: {http: "http://127.0.0.1:8780", udp_port: 8781, tcp_port: 8782}
 proxy: {listen: 9781, control_port: 9790, drop: 0.0, delay_ms: 0, jitter_ms: 0, reorder: 0.0, dup: 0.0}
 devices:
@@ -14,7 +16,30 @@ devices:
   - {id: ECU-0005, profile: city,    fw: 1.0.0, hw: SIM-MOTOR-A, hz: 10, drop_rate: 0.0, seed: 105, via_proxy: true}
   - {id: ECU-0006, profile: idle,    fw: 1.0.0, hw: SIM-MOTOR-B, hz: 5,  drop_rate: 0.0, seed: 106}
 timeline:
-  - {at_s: 2, action: note, say: "Six ECUs are coming up on a fresh database. Open the dashboard."}
+  # 1. healthy fleet
+  - {at_s: 2, action: note, say: "1/6 Six ECUs are coming up on a fresh database. Open the dashboard."}
+  # 2. thermal fault, injected over the control channel
+  - {at_s: 15, action: fault, device: ECU-0001, params: {set: [OVERTEMP], duration_ms: 25000},
+     say: "2/6 Thermal fault on ECU-0001 for 25 s. Watch its tile go to FAULT and the alerts open."}
+  # 3. diagnosis (the diagnosis_nonempty check at 32 s makes the call)
+  - {at_s: 32, action: note, say: "3/6 Asking the backend to diagnose ECU-0001 from its recent stats, alerts and logs."}
+  # 4. config push: a lower limit trips the device's own protection, then it is restored
+  - {at_s: 45, action: config, device: ECU-0004,
+     params: {telemetry_hz: 10, log_level: "info", rpm_limit: 6000, temp_limit_c: 30.0, current_limit_a: 120},
+     say: "4/6 Config push: ECU-0004's temp limit drops to 30 C. The device acks the new version and its own protection trips."}
+  - {at_s: 70, action: config, device: ECU-0004,
+     params: {telemetry_hz: 10, log_level: "info", rpm_limit: 6000, temp_limit_c: 90.0, current_limit_a: 120},
+     say: "    Limit restored to 90 C."}
+  # 5. OTA rollout, staggered
+  - {at_s: 75, action: firmware_register, params: {version: "1.1.0", notes: "demo rollout", size_bytes: 1000000},
+     say: "5/6 OTA: firmware 1.1.0 registered, deploying to ECU-0002 then ECU-0003. Each acks, reboots and says HELLO with the new version."}
+  - {at_s: 78, action: firmware_deploy, device: ECU-0002, params: {version: "1.1.0"}}
+  - {at_s: 88, action: firmware_deploy, device: ECU-0003, params: {version: "1.1.0"}}
+  # 6. degraded link
+  - {at_s: 110, action: proxy_set, params: {drop: 0.3},
+     say: "6/6 ECU-0005's link now drops 30 % of its packets. Loss is measured from sequence gaps; watch its loss % climb."}
+  - {at_s: 135, action: proxy_set, params: {drop: 0.0}, say: "    Link restored. Loss falls as the window refills."}
+  - {at_s: 176, action: note, say: "Done. The alerts the story opened have closed on their own."}
 expect:
   - {at_s: 12, check: device_state, device: ECU-0001, params: {online: true, has_telemetry: true, state: [IDLE, RUNNING]}}
   - {at_s: 12, check: device_state, device: ECU-0002, params: {online: true, has_telemetry: true}}
@@ -22,5 +47,18 @@ expect:
   - {at_s: 12, check: device_state, device: ECU-0004, params: {online: true, has_telemetry: true}}
   - {at_s: 12, check: device_state, device: ECU-0005, params: {online: true, has_telemetry: true}}
   - {at_s: 12, check: device_state, device: ECU-0006, params: {online: true, has_telemetry: true}}
-  - {at_s: 20, check: loss_pct_gt, device: ECU-0005, params: {value: 1, invert: true}}
-  - {at_s: 20, check: no_alerts_of_severity, params: {severity: critical}}
+  - {at_s: 25, check: alert_open,   device: ECU-0001, params: {match: OVERTEMP}}
+  - {at_s: 30, check: device_state, device: ECU-0001, params: {state: [DEGRADED, FAULT], fault_flags_any: [OVERTEMP]}}
+  - {at_s: 32, check: diagnosis_nonempty, device: ECU-0001, params: {}}
+  - {at_s: 52, check: config_version, device: ECU-0004, params: {min: 2, acked: true}}
+  - {at_s: 62, check: alert_open,   device: ECU-0004, params: {match: temp}}
+  - {at_s: 95, check: device_fw,    device: ECU-0002, params: {version: "1.1.0"}}
+  - {at_s: 100, check: alert_resolved, device: ECU-0004, params: {match: temp}}
+  - {at_s: 105, check: device_fw,   device: ECU-0003, params: {version: "1.1.0"}}
+  - {at_s: 105, check: device_fw,   device: ECU-0006, params: {version: "1.0.0"}}
+  - {at_s: 108, check: alert_resolved, device: ECU-0001, params: {match: OVERTEMP}}
+  - {at_s: 125, check: loss_pct_gt, device: ECU-0005, params: {value: 10}}
+  - {at_s: 128, check: alert_open,  device: ECU-0005, params: {match: ["loss", "comm"]}}
+  - {at_s: 128, check: loss_pct_gt, device: ECU-0006, params: {value: 1, invert: true}}
+  - {at_s: 170, check: alert_resolved, device: ECU-0005, params: {match: ["loss", "comm"]}}
+  - {at_s: 174, check: no_alerts_of_severity, params: {severity: critical}}

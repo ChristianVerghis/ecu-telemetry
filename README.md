@@ -75,7 +75,7 @@ Two changes came out of running on hardware. Device-side thresholds gained hyste
 
 ## Run it
 
-The whole thing in one command: a fresh database, the backend, and six simulated ECUs. It prints the dashboard URL and stays up until Ctrl-C.
+The whole thing in one command: a fresh database, the backend, and six simulated ECUs. It prints the dashboard URL, then walks a three-minute story and narrates it in the terminal: a thermal fault and its alerts, a diagnosis, a config push that trips a device's own protection, a staggered OTA rollout, and a link losing 30 % of its packets. Each step asserts what it claims (21 checks). The fleet then stays up until Ctrl-C.
 
 ```bash
 make demo
