@@ -67,7 +67,7 @@ The demo must run on the Mac alone; the Jetson is a bonus when it is reachable. 
 - [x] `make demo` passes as a test (`make demo-check`, 21 expectations) and runs in CI as the third `sil` job
 
 ### D3 · things to point at
-- [ ] Dashboard screenshots + a short GIF of the storyline in the README (headless Chrome works: `--headless=new --timeout=7000 --screenshot`, no `--virtual-time-budget`, SSE hangs it)
+- [x] Dashboard screenshots + a short GIF of the storyline in the README (`tools/capture.mjs` drives headless Chrome over the DevTools protocol; the `--screenshot` flag fires before the charts have data)
 - [ ] `docs/demo.md`: the walkthrough, what to say at each step, and the design questions an interviewer will ask (why UDP + TCP, loss from sequence gaps, CRC, SQLite WAL + rollups, EWMA vs thresholds, the hysteresis story, what SIL with real binaries buys)
 - [ ] Numbers to quote: frames/s per device and fleet, ingest latency, loss measured vs injected through the lossy proxy
 

@@ -2,6 +2,10 @@
 
 **A self-contained connected-vehicle telemetry stack: C++ ECU agents (a simulated fleet plus one real Jetson board) stream a binary protocol into a FastAPI backend with time-series storage, live dashboard, alerting, OTA, and a software-in-the-loop test harness.**
 
+![The make demo walkthrough on the dashboard](docs/img/demo.gif)
+
+*`make demo`, three minutes shown in fifteen seconds: a thermal fault and its alerts, a config push that trips a second device, an OTA rollout to two devices, and a link losing 30 % of its packets.*
+
 ## What it is
 
 The pipeline, end to end:
@@ -83,6 +87,10 @@ make demo
 
 It uses ports 8780-8782 when they are free and says so when it has to move to 8790-8792.
 
+![Device page for ECU-0001 during the injected thermal fault](docs/img/device.png)
+
+*Step 2 of the walkthrough, 25 seconds after the fault was injected: the device reports OVERTEMP, and the flag, rate-of-change and threshold alerts have opened in that order.*
+
 The pieces, one at a time. Backend (creates `backend/.venv` on first run, serves on http://localhost:8780):
 
 ```bash
@@ -135,7 +143,8 @@ Further docs: [docs/protocol.md](docs/protocol.md) (wire format), [docs/interfac
 - `backend/` — FastAPI service: ingestion servers, SQLite storage, alert engine, diagnostics, REST + SSE API, static dashboard, pytest suite, Dockerfile.
 - `sim/` — SIL runner, fleet launcher, lossy UDP proxy, YAML scenarios.
 - `tests/` — integration tests that run the real agent against the real backend.
-- `docs/` — protocol spec, interface contracts, architecture notes, hardware notes.
+- `docs/` — protocol spec, interface contracts, architecture notes, hardware notes, images.
+- `tools/capture.mjs` — dashboard screenshots and frame sequences from headless Chrome (how the images here were made).
 - `deploy/jetson/` — user systemd service, environment file, and installer for the board.
 - `.github/workflows/` — CI and tagged-release pipelines.
 - `docker-compose.yml`, `Makefile`, `run.sh` — local entry points.
