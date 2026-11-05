@@ -11,7 +11,7 @@
 The pipeline, end to end:
 
 - **Device / ECU** (`firmware/`): a dependency-free C++17 agent that behaves like a motor-controller ECU. It runs a deterministic plant model (motor, battery, thermal, vibration, GPS) with four drive-cycle profiles and eight injectable fault flags, streams `TELEMETRY` frames over UDP at a fixed rate, and holds a TCP control connection with exponential-backoff reconnect. With `--source jetson` the same binary runs on a Jetson Orin Nano and reports the board's measured temperature, input voltage and current, and fan speed instead of the plant model's.
-- **Wire protocol** (`docs/protocol.md`): one frame format for both transports. 36-byte little-endian header (magic, version, message type, device ID, sequence number, timestamp, firmware version, payload length) plus a CRC-32 trailer. Implemented once in C++ and once in Python, cross-tested with shared byte vectors.
+- **Wire protocol** (`docs/protocol.md`): one frame format for both transports. 36-byte little-endian header (magic, version, message type, device ID, sequence number, timestamp, firmware version, payload length) plus a CRC-32 trailer. Implemented once in C++ and once in Python; each is tested against the spec's layout byte by byte, and against the other by the integration and SIL runs.
 - **Ingestion and storage** (`backend/app/ingest.py`, `db.py`): asyncio UDP datagram server and TCP stream server. Packet loss is estimated from sequence gaps; devices go offline after 15 s of silence. Samples land in SQLite (WAL mode) via batched inserts, with 1-minute rollups and 24 h raw retention.
 - **Alerts** (`backend/app/anomaly.py`): editable threshold rules, EWMA z-score anomaly detection, and rate-of-change rules, with per-device deduplication, auto-resolve after the condition clears, and per-device threshold overrides (a 5 V board and a 96 V pack do not share an undervoltage limit).
 - **Control plane**: versioned device configuration pushed over the TCP channel (`CONFIG_SET`), simulated firmware OTA (`FW_UPDATE` / `FW_ACK` / reboot / `HELLO`), remote fault injection, and `LOG` frames shipped to a per-device log store.
@@ -143,6 +143,8 @@ backend/.venv/bin/python -m pytest -q tests/integration # real agent <-> real ba
 `make help` lists the equivalent Make targets (`build`, `test`, `demo`, `bench`, `sil`, `sil-all`, `fleet`, `up`, `clean`, `jetson-deploy`, `jetson-logs`).
 
 Set `ANTHROPIC_API_KEY` to enable Claude-backed diagnostics; without it the heuristic diagnostician answers and results are tagged `model: "heuristic"`.
+
+The demo walkthrough, with what to say at each step and the questions it raises, is in [docs/demo.md](docs/demo.md).
 
 Further docs: [docs/protocol.md](docs/protocol.md) (wire format), [docs/interfaces.md](docs/interfaces.md) (CLI / REST / SIL contracts), [docs/architecture.md](docs/architecture.md) (layers and data flow), [docs/hardware.md](docs/hardware.md) (the Jetson target), [docs/measurements.md](docs/measurements.md) (throughput, latency, loss), plus `firmware/README.md`, `backend/README.md`, `sim/README.md`.
 

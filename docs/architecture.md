@@ -22,7 +22,7 @@
 |---|---|---|
 | Device / ECU | `firmware/src/physics.cpp` | Deterministic motor + battery + thermal + vibration + GPS model, drive-cycle profiles, fault flags mutate the model. |
 | Telemetry agent | `firmware/src/agent.cpp` | Fixed-rate loop, UDP sender, select()-based TCP control client, backoff reconnect, simulated OTA. |
-| Protocol | `docs/protocol.md`, `firmware/src/protocol.cpp`, `backend/app/protocol.py` | 36-byte header, LE, CRC-32 trailer. Same codec in both languages, cross-tested with byte vectors. |
+| Protocol | `docs/protocol.md`, `firmware/src/protocol.cpp`, `backend/app/protocol.py` | 36-byte header, LE, CRC-32 trailer. Same codec in both languages, each tested against the layout, and against each other by the integration and SIL runs. |
 | Ingestion | `backend/app/ingest.py` | asyncio DatagramProtocol + StreamReader control server; seq-gap packet-loss estimator; offline detector. |
 | Storage | `backend/app/db.py` | SQLite WAL, batched inserts, raw 24 h retention, 1-minute rollups. |
 | Alerts | `backend/app/anomaly.py` | Threshold rules (editable), EWMA z-score anomaly, rate-of-change, dedupe + auto-resolve. |
