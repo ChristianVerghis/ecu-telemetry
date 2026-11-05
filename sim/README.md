@@ -154,3 +154,7 @@ etc. It warns (does not fail) about events scheduled after `duration_s`.
   `--duration` and `--stats-every` help when using it standalone.
 * **`fleet.py`** — `python sim/fleet.py --n 8 --profiles city,highway --drop 0.02` launches N
   agents against a running backend for dashboard demos; Ctrl-C stops them all.
+
+## bench.py
+
+`python sim/bench.py` (`make bench`) starts its own backend on free ports and measures ingest throughput at rising load, device-to-backend transit and fault-to-alert latency, and the loss the backend infers at several proxy drop rates. It prints markdown tables; the committed results are in `docs/measurements.md`. `--only throughput|latency|loss` runs one part.

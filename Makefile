@@ -28,7 +28,7 @@ COMPOSE        ?= docker compose
 # auto = 8780-8782 when free, else the first free triple from 8790; or a port number
 DEMO_PORTS     ?= auto
 
-.PHONY: jetson-deploy jetson-logs demo demo-check help build venv test test-firmware test-backend test-integration sil sil-all validate fleet up down clean
+.PHONY: jetson-deploy jetson-logs demo demo-check bench help build venv test test-firmware test-backend test-integration sil sil-all validate fleet up down clean
 
 help: ## list targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
@@ -74,6 +74,9 @@ demo: build venv ## one command: fresh database, backend, 6 simulated ECUs; prin
 
 demo-check: build venv ## run the demo timeline once as a test and exit (no hold)
 	$(PY) sim/run_sil.py sim/scenarios/demo.yml --agent $(AGENT) --start-backend --ports $(DEMO_PORTS)
+
+bench: build venv ## measure throughput, latency and loss on this machine (about 4 minutes, markdown tables)
+	$(PY) sim/bench.py --agent $(AGENT)
 
 up: ## docker compose up --build (add PROFILE=chaos for the lossy proxy)
 	$(COMPOSE) $(if $(PROFILE),--profile $(PROFILE),) up --build

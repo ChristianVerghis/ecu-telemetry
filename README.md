@@ -68,6 +68,15 @@ One real event, start to finish: a config push lowered `temp_limit_c` to 52 °C 
 
 Two changes came out of running on hardware. Device-side thresholds gained hysteresis, because a board hovering at exactly its limit produced 13 set/clear pairs in a minute. Backend threshold rules gained per-device overrides, because the fixed 80 V undervoltage rule was permanently true for a 5 V board. Details in [docs/hardware.md](docs/hardware.md).
 
+## Measured
+
+From `make bench` on an M3 Max laptop in ordinary use; tables and method in [docs/measurements.md](docs/measurements.md).
+
+- **Throughput**: the single Python backend process ingests 10,000 frames per second with no loss at 77 % of one core, and saturates between 10,000 and 20,000. The six-device demo fleet uses 3 %.
+- **Fault to alert**: 91 ms median, 101 ms worst of 24, from the REST call that injects a fault to the alert opening. The 100 ms telemetry period sets it, not the backend.
+- **Transit**: 0.7 ms median from the device's timestamp to backend receive over loopback.
+- **Loss**: with 5 to 50 % of packets dropped by the proxy, the loss the backend infers from sequence gaps is within about one point of what was dropped.
+
 ## Stack
 
 - **Firmware**: C++17, CMake 3.16+, CTest, POSIX sockets, no third-party dependencies.
@@ -131,17 +140,17 @@ backend/.venv/bin/python -m pytest -q backend/tests     # protocol / db / anomal
 backend/.venv/bin/python -m pytest -q tests/integration # real agent <-> real backend
 ```
 
-`make help` lists the equivalent Make targets (`build`, `test`, `demo`, `sil`, `sil-all`, `fleet`, `up`, `clean`, `jetson-deploy`, `jetson-logs`).
+`make help` lists the equivalent Make targets (`build`, `test`, `demo`, `bench`, `sil`, `sil-all`, `fleet`, `up`, `clean`, `jetson-deploy`, `jetson-logs`).
 
 Set `ANTHROPIC_API_KEY` to enable Claude-backed diagnostics; without it the heuristic diagnostician answers and results are tagged `model: "heuristic"`.
 
-Further docs: [docs/protocol.md](docs/protocol.md) (wire format), [docs/interfaces.md](docs/interfaces.md) (CLI / REST / SIL contracts), [docs/architecture.md](docs/architecture.md) (layers and data flow), [docs/hardware.md](docs/hardware.md) (the Jetson target), plus `firmware/README.md`, `backend/README.md`, `sim/README.md`.
+Further docs: [docs/protocol.md](docs/protocol.md) (wire format), [docs/interfaces.md](docs/interfaces.md) (CLI / REST / SIL contracts), [docs/architecture.md](docs/architecture.md) (layers and data flow), [docs/hardware.md](docs/hardware.md) (the Jetson target), [docs/measurements.md](docs/measurements.md) (throughput, latency, loss), plus `firmware/README.md`, `backend/README.md`, `sim/README.md`.
 
 ## Layout
 
 - `firmware/` — C++17 ECU agent: plant model, protocol codec, UDP/TCP client, OTA/config, CTest suite, Dockerfile.
 - `backend/` — FastAPI service: ingestion servers, SQLite storage, alert engine, diagnostics, REST + SSE API, static dashboard, pytest suite, Dockerfile.
-- `sim/` — SIL runner, fleet launcher, lossy UDP proxy, YAML scenarios.
+- `sim/` — SIL runner, fleet launcher, lossy UDP proxy, benchmark, YAML scenarios.
 - `tests/` — integration tests that run the real agent against the real backend.
 - `docs/` — protocol spec, interface contracts, architecture notes, hardware notes, images.
 - `tools/capture.mjs` — dashboard screenshots and frame sequences from headless Chrome (how the images here were made).

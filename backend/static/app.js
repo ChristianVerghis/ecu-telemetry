@@ -212,7 +212,7 @@ function DeviceView(id) {
   function side() {
     const d = detail, s = d.stats || {};
     const kv = (o) => Object.entries(o).flatMap(([k, v]) => [h("span", { class: "k" }, k), h("span", { class: "v" }, v)]);
-    $("#link").replaceChildren(...kv({ "loss %": fmt(s.loss_pct), "frames rx": s.frames_rx ?? 0, "seq gaps": s.seq_gaps ?? 0, "bad crc": s.bad_crc ?? 0, "reconnects (backend)": s.reconnects ?? 0, "reconnects (device)": d.device_reconnects ?? "—", "last seen": `${ago(d.last_seen)} ago`, "last seq": s.last_seq ?? "—" }));
+    $("#link").replaceChildren(...kv({ "loss %": fmt(s.loss_pct), "frames rx": s.frames_rx ?? 0, "seq gaps": s.seq_gaps ?? 0, "bad crc": s.bad_crc ?? 0, "reconnects (backend)": s.reconnects ?? 0, "reconnects (device)": d.device_reconnects ?? "—", "transit ms": s.transit_ms ?? "—", "last seen": `${ago(d.last_seen)} ago`, "last seq": s.last_seq ?? "—" }));
     $("#meta").replaceChildren(...kv({ "hw": d.hw_model || "—", "fw": d.fw_version || "—", "uptime": d.uptime_s != null ? `${Math.floor(d.uptime_s / 60)}m ${d.uptime_s % 60}s` : "—", "hz": d.telemetry_hz ?? "—", "cfg (backend)": `v${d.config_version}`, "cfg (device)": `v${d.reported_config_version}`, "first seen": d.first_seen ? new Date(d.first_seen).toLocaleString() : "—", "open alerts": d.open_alerts }));
     const buf = S.live.get(id);
     drawMap($("#map"), buf?.pos?.length ? buf.pos : (hist?.rows || []).map(r => [r.lat, r.lon]), d.faults);

@@ -69,7 +69,7 @@ The demo must run on the Mac alone; the Jetson is a bonus when it is reachable. 
 ### D3 · things to point at
 - [x] Dashboard screenshots + a short GIF of the storyline in the README (`tools/capture.mjs` drives headless Chrome over the DevTools protocol; the `--screenshot` flag fires before the charts have data)
 - [ ] `docs/demo.md`: the walkthrough, what to say at each step, and the design questions an interviewer will ask (why UDP + TCP, loss from sequence gaps, CRC, SQLite WAL + rollups, EWMA vs thresholds, the hysteresis story, what SIL with real binaries buys)
-- [ ] Numbers to quote: frames/s per device and fleet, ingest latency, loss measured vs injected through the lossy proxy
+- [x] Numbers to quote (`make bench`, `docs/measurements.md`): 10,000 frames/s with no loss on one core; fault to alert 91 ms median; transit 0.7 ms; measured loss within about a point of injected from 5 to 50 %
 
 ### D4 · the real device (needs the Jetson reachable)
 - [ ] (owner) Re-authenticate Tailscale SSH and run `deploy/jetson/install.sh` on the board once

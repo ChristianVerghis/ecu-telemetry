@@ -26,6 +26,7 @@ class DeviceStats:
     online: bool = False
     window: deque = field(default_factory=lambda: deque(maxlen=LOSS_WINDOW))  # (received=1, expected=1+gap)
     tx_seq: int = 0
+    transit_ms: float | None = None  # last frame: receive time minus the device's own timestamp (includes clock offset)
 
     @property
     def loss_pct(self) -> float:
@@ -51,7 +52,7 @@ class DeviceStats:
 
     def as_dict(self) -> dict:
         return {"frames_rx": self.frames_rx, "bad_crc": self.bad_crc, "seq_gaps": self.seq_gaps,
-                "loss_pct": self.loss_pct, "reconnects": self.reconnects, "tcp_connected": self.tcp_connected,
+                "loss_pct": self.loss_pct, "transit_ms": self.transit_ms, "reconnects": self.reconnects, "tcp_connected": self.tcp_connected,
                 "online": self.online, "last_seen": self.last_seen, "last_seen_iso": iso(self.last_seen),
                 "last_seq": self.last_seq}
 
@@ -171,6 +172,7 @@ class Ingest:
         s.frames_rx += 1
         s.note_seq(frame.header.seq)
         now = time.time()
+        s.transit_ms = round(now * 1000.0 - frame.header.ts_ms, 1)
         t: P.Telemetry = frame.payload
         d = t.as_dict()
         d.update({"device_id": dev, "ts": now, "ts_iso": iso(now), "device_ts_ms": frame.header.ts_ms,

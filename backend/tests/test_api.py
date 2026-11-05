@@ -126,6 +126,8 @@ async def test_full_flow(server):
     detail = (await client.get(f"/api/devices/{DEV}")).json()
     assert detail["stats"]["frames_rx"] == 20 and detail["stats"]["seq_gaps"] == 10 and detail["stats"]["bad_crc"] == 1
     assert detail["stats"]["loss_pct"] == pytest.approx(100 * 10 / 30, abs=0.1)
+    # receive time minus the frame's own timestamp: sent and received within this test
+    assert 0 <= detail["stats"]["transit_ms"] < 5000
     # packet-loss alert fired (loss 33% > 10)
     alerts = (await client.get("/api/alerts", params={"device": DEV})).json()
     assert "packet_loss" in {a["rule"] for a in alerts}
