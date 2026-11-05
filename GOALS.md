@@ -57,7 +57,7 @@ The demo must run on the Mac alone; the Jetson is a bonus when it is reachable. 
 
 ### D1 · the repo looks alive
 - [x] CI green on `main`: bring over the SIL log-filename fix from `nightly/2026-09-21` (440e887); `main` has been red since 09-15 only because of the artifact upload step
-- [ ] README status is from 09-15 and still says "no real hardware target": update Status, add the Jetson section with the real thermal event from `docs/hardware.md`
+- [x] README status is from 09-15 and still says "no real hardware target": update Status, add the Jetson section with the real thermal event from `docs/hardware.md`
 - [ ] Decide the nightly branches: merge or drop the 7-day chart (`nightly/2026-09-25`) and MQTT (`nightly/2026-10-01`); delete the four local-only duplicates
 
 ### D2 · one command, one story
